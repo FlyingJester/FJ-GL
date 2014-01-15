@@ -21,6 +21,11 @@
 
 #endif
 
+#ifdef __GNUC__
+    #define ALIGN __attribute__((aligned(16)))
+#endif
+
+
 
 typedef unsigned int RGBA;
 
@@ -30,7 +35,7 @@ typedef struct {
     const char* date;
     const char* version;
     const char* description;
-}  DriverInfo_t;
+} DriverInfo_t;
 
 
 typedef enum {
@@ -52,7 +57,7 @@ typedef struct {
     unsigned int w;
     unsigned int h;
 
-} IMAGE;
+} ALIGN IMAGE;
 
 #ifdef __linux__
 EXPORT(bool InternalInitVideo(int w, int h));

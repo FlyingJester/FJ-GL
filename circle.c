@@ -6,14 +6,14 @@ int **ApproximateCircle(const int x, const int y, const unsigned int r, const in
     float angle = 0;
 
 
-    float inc = (PI2)/((float)(step));
+    float inc = (PI2)/((float)(step+2));
 
     int i = 0;
 
     while(i<step){
         points[i] = malloc(8);
-        points[i][0] = (((float)(cos(angle)))*(fr))+x;
-        points[i][1] = (((float)(sin(angle)))*(fr))+y;
+        points[i][0] = ((((float)(cosf(angle)))*(fr))+0.5f)+x;
+        points[i][1] = ((((float)(sinf(angle)))*(fr))+0.5f)+y;
         angle+=inc;
         i++;
     }
@@ -25,13 +25,13 @@ int *ApproximateCircleGL(const int x, const int y, const unsigned int r, const i
     int *const points = malloc(step<<3);
     float angle = 0;
 
-    float inc = (PI2)/((float)(step));
+    float inc = (PI2)/((float)(step-2));
 
     int i = 0;
 
     while(i<step){
-        points[(i*2)  ] = (((float)(cos(angle)))*(fr))+x;
-        points[(i*2)+1] = (((float)(sin(angle)))*(fr))+y;
+        points[(i*2)  ] = ((((float)(cosf(angle)))*(fr))+0.5f)+x;
+        points[(i*2)+1] = ((((float)(sinf(angle)))*(fr))+0.5f)+y;
         angle+=inc;
         i++;
     }
@@ -46,14 +46,14 @@ int **ApproximateEllipse(const int x, const int y, const unsigned int rx,const u
     float angle = 0;
 
 
-    float inc = (PI2)/((float)(step));
+    float inc = (PI2)/((float)(step-2));
 
     int i = 0;
 
     while(i<step){
         points[i] = malloc(8);
-        points[i][0] = (((float)(cos(angle)))*(frx))+x;
-        points[i][1] = (((float)(sin(angle)))*(fry))+y;
+        points[i][0] = ((((float)(cosf(angle)))*(frx))+0.5f)+x;
+        points[i][1] = ((((float)(sinf(angle)))*(fry))+0.5f)+y;
         angle+=inc;
         i++;
     }
@@ -65,13 +65,13 @@ int *ApproximateEllipseGL(const int x, const int y,  const unsigned int rx,const
     int *const points = malloc(step<<3);
     float angle = 0;
 
-    float inc = (PI2)/((float)(step));
+    float inc = (PI2)/((float)(step-2));
 
     int i = 0;
 
     while(i<step){
-        points[(i*2)  ] = (((float)(cos(angle)))*(frx))+x;
-        points[(i*2)+1] = (((float)(sin(angle)))*(fry))+y;
+        points[(i*2)  ] = ((((float)(cosf(angle)))*(frx))+0.5f)+x;
+        points[(i*2)+1] = ((((float)(sinf(angle)))*(fry))+0.5f)+y;
         angle+=inc;
         i++;
     }

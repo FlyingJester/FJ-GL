@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+
 /////
 // Some math.h headers have this, some don't.
 
@@ -18,9 +19,9 @@ static float PI2 = 6.28318530717958647692f;
 /////
 // Array of {x, y} coordinates
 
-int **ApproximateCircle(const int x, const int y, const unsigned int r, const int step);
+int **ApproximateCircle(const int x, const int y, const unsigned int r, const int step) ;
 int *ApproximateCircleGL(const int x, const int y, const unsigned int r, const int step);
-int **ApproximateEllipse(const int x, const int y, const unsigned int rx,const unsigned int ry, const int step);
+int **ApproximateEllipse(const int x, const int y, const unsigned int rx,const unsigned int ry, const int step) ;
 int *ApproximateEllipseGL(const int x, const int y,  const unsigned int rx,const unsigned int ry, const int step);
 
 void FreeCirclePoints(int  **p, int step);

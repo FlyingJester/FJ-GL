@@ -1,7 +1,11 @@
 #include "api.h"
 #include "glExtra.h"
 #include "circle.h"
+#include "shader.h"
+#include "shader.h"
 #include <stdio.h>
+
+#define MAX_STACK_STEAL 0x80
 
 unsigned int Scale = 1;
 unsigned int Width = 320;
@@ -31,8 +35,8 @@ inline bool Visible(int x, int y, int w, int  h){
     return true;
 }
 
-inline Colored(unsigned int color){
-    return color&0x000000FF;
+inline bool Colored(unsigned int color){
+    return ((color&0x000000FF)!=0);
 }
 
 void *ScreenCopy = NULL;
@@ -98,8 +102,8 @@ bool InternalInitVideo(int w, int h){
         return false;
     }
 
-    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,2);
-    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,0);
+    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
+    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,1);
     //SDL_GL_SetAttribute(SDL_GL_RED_SIZE,8);
     //SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,8);
     //SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,8);
@@ -123,6 +127,8 @@ bool InternalInitVideo(int w, int h){
 
     LoadGLFunctions();
 
+    CurrentShader = LoadEmbeddedShader();
+    DefaultShader = CurrentShader;
     if(s==NULL){
         fprintf(stderr, "[FJ-GL] Error: Could not open window.\n\tError: %s\n", SDL_GetError());
     }
@@ -142,6 +148,8 @@ bool InternalInitVideo(int w, int h){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &white);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
 
     GLfloat texcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
@@ -204,6 +212,18 @@ EXPORT(void FlipScreen(void)){
 }
 EXPORT(void SetClippingRectangle(int x, int y, int w, int h)){
 
+    if(w>Width)
+        w=Width;
+    if(h>Height)
+        w=Width;
+    if(x<0)
+        x=0;
+    if(y<0)
+        y=0;
+
+    if((x==ClipRectX)&&(y==ClipRectY)&&(w==ClipRectW)&&(h==ClipRectH))
+        return;
+
     ClipRectX = x;
     ClipRectY = y;
     ClipRectW = w;
@@ -225,7 +245,7 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
 
     RGBA *newpixels = malloc(width*height*4);
 
-    #pragma omp parallel for num_threads(2)
+
     for(int i = 0; i<height; ++i){
         memcpy(newpixels+(i*width), pixels+(i*width), width*4);
     }
@@ -295,7 +315,7 @@ EXPORT(void DestroyImage(IMAGE * image)){
     if(image->pixels)
         free(image->pixels);
     glDeleteTextures(1, &(image->texture));
-
+    free(image);
 }
 
 EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
@@ -314,11 +334,11 @@ EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
 }
 
@@ -343,11 +363,11 @@ EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
 }
 
@@ -365,11 +385,11 @@ EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blen
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
 }
 EXPORT(void TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
@@ -390,11 +410,11 @@ EXPORT(void TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode 
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 }
 EXPORT(int GetImageWidth(IMAGE * image)){
     return image->w;
@@ -425,28 +445,50 @@ EXPORT(void DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
     //if(!Visible(x, y, w, h))
     //    return;
 
-    IMAGE *image = CreateImage(w, h, pixels);
-    int xs[] = {x, x+w, x+w, x};
-    int ys[] = {y, y, y+h, y+h};
+    IMAGE image;
 
-    BlitImage(image, x, y, 0);
+    glGenTextures(1, &(image.texture));
 
-//    TransformBlitImage(image, ys, ys, 0);
+    glBindTexture(GL_TEXTURE_2D, image.texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-    DestroyImage(image);
+    image.pixels = NULL;
+    image.w = w;
+    image.h = h;
+
+    BlitImage(&image, x, y, 0);
+
+    glDeleteTextures(1, &(image.texture));
 
 }
 
 EXPORT(void DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels)){
-    IMAGE *image = CreateImage(w, h, pixels);
-    TransformBlitImage(image, x, y, 0);
-    DestroyImage(image);
+
+    IMAGE image;
+
+    glGenTextures(1, &(image.texture));
+
+    glBindTexture(GL_TEXTURE_2D, image.texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+    image.pixels = NULL;
+    image.w = w;
+    image.h = h;
+
+    //IMAGE *image = CreateImage(w, h, pixels);
+    TransformBlitImage(&image, x, y, 0);
+    glDeleteTextures(1, &(image.texture));
+    //DestroyImage(image);
 }
 
 EXPORT(void DirectGrab(int x, int y, int w, int h, RGBA* pixels)){
     glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
 
-    #pragma omp parallel for num_threads(2)
+
     for(int i = 0; i<h; ++i){
         memcpy(pixels+((i*w)<<2), ScreenCopy+((h-i)*w<<2), w<<2);
     }
@@ -468,11 +510,11 @@ EXPORT(void DrawPoint(int x, int y, RGBA color)){
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_POINTS, 0, 1);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
 }
 
@@ -483,7 +525,7 @@ EXPORT(void DrawPointSeries(int** points, int length, RGBA color)){
     if(!length)
         return;
 
-    if(length<0x50)
+    if(length<MAX_STACK_STEAL)
         goto onstack;
 
     RGBA  *colors = NULL;
@@ -508,7 +550,7 @@ fill:;
 
     GLint *texCoords = calloc(8, length);
 
-    #pragma omp parallel for num_threads(2)
+
     for(int i = 0; i<length; ++i){
         colors[i] = color;
         vertex[(i*2)  ] = points[i][0];
@@ -520,15 +562,15 @@ fill:;
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_POINTS, 0, length);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
     free(texCoords);
 
-    if(length<0x50)
+    if(length<MAX_STACK_STEAL)
         return;
 
     free(colors);
@@ -560,11 +602,11 @@ EXPORT(void DrawGradientLine(int x[2], int y[2], RGBA colors[2])){
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_LINES, 0, 2);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 }
 
 EXPORT(void DrawLineSeries(int** points, int length, RGBA color, int type)){
@@ -574,7 +616,7 @@ EXPORT(void DrawLineSeries(int** points, int length, RGBA color, int type)){
     if(!length)
         return;
 
-    if(length<0x50)
+    if(length<MAX_STACK_STEAL)
         goto onstack;
 
     GLenum gltype = GL_LINES;
@@ -609,7 +651,7 @@ fill:;
 
     GLint *texCoords = calloc(8, length);
 
-    #pragma omp parallel for num_threads(2)
+
     for(int i = 0; i<length; ++i){
         colors[i] = color;
         vertex[(i*2)  ] = points[i][0];
@@ -621,16 +663,16 @@ fill:;
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(gltype, 0, length);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
 
     free(texCoords);
 
-    if(length<0x50)
+    if(length<MAX_STACK_STEAL)
         return;
 
     free(colors);
@@ -661,11 +703,11 @@ EXPORT(void DrawGradientTriangle(int x[3], int y[3], RGBA colors[3])){
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 3);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 }
 EXPORT(void DrawPolygon(int** points, int length, int invert, RGBA color)){
     if(!Colored(color))
@@ -674,7 +716,7 @@ EXPORT(void DrawPolygon(int** points, int length, int invert, RGBA color)){
     if(!length)
         return;
 
-    if(length<0x50)
+    if(length<MAX_STACK_STEAL)
         goto onstack;
 
     RGBA  *colors = NULL;
@@ -699,7 +741,7 @@ fill:;
 
     GLint *texCoords = calloc(8, length);
 
-    #pragma omp parallel for num_threads(2)
+
     for(int i = 0; i<length; ++i){
         colors[i] = color;
         vertex[(i*2)  ] = points[i][0];
@@ -711,16 +753,16 @@ fill:;
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_STRIP, 0, length);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
 
     free(texCoords);
 
-    if(length<0x50)
+    if(length<MAX_STACK_STEAL)
         return;
 
     free(colors);
@@ -743,11 +785,11 @@ EXPORT(void DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 }
 
 EXPORT(void DrawRectangle(int x, int y, int w, int h, RGBA color)){
@@ -786,11 +828,11 @@ EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA col
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 8);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 }
 
 EXPORT(void DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color)){
@@ -806,7 +848,7 @@ EXPORT(void DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color)){
 
     GLint * vertex = ApproximateEllipseGL(x, y, rx, ry, step);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         goto onstack;
 
     RGBA  *colors = NULL;
@@ -825,7 +867,7 @@ fill:;
 
     GLint *texCoords = calloc(8, step);
 
-    #pragma omp parallel for num_threads(2)
+
     for(unsigned int i = 0; i<step; i++){
         colors[i] = color;
     }
@@ -836,17 +878,17 @@ fill:;
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_LINE_LOOP, 0, step);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
     FreeEllipsePointsGL(vertex);
 
     free(texCoords);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         return;
 
     free(colors);
@@ -864,7 +906,7 @@ EXPORT(void DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color)){
 
     GLint * vertex = ApproximateEllipseGL(x, y, rx, ry, step);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         goto onstack;
 
     RGBA  *colors = NULL;
@@ -893,17 +935,17 @@ fill:;
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, step);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
     FreeEllipsePointsGL(vertex);
 
     free(texCoords);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         return;
 
     free(colors);
@@ -922,7 +964,7 @@ EXPORT(void DrawOutlinedCircle(int x, int y, int r, RGBA color, int antialias)){
 
     GLint * vertex = ApproximateCircleGL(x, y, r, step);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         goto onstack;
 
     RGBA  *colors = NULL;
@@ -941,7 +983,7 @@ fill:;
 
     GLint *texCoords = calloc(8, step);
 
-    #pragma omp parallel for num_threads(2)
+
     for(unsigned int i = 0; i<step; i++){
         colors[i] = color;
     }
@@ -952,17 +994,17 @@ fill:;
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_LINE_LOOP, 0, step);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
     FreeEllipsePointsGL(vertex);
 
     free(texCoords);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         return;
 
     free(colors);
@@ -980,7 +1022,7 @@ EXPORT(void DrawFilledCircle(int x, int y, int r, RGBA color, int antialias)){
 
     GLint * vertex = ApproximateCircleGL(x, y, r, step);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         goto onstack;
 
     RGBA  *colors = NULL;
@@ -988,7 +1030,6 @@ EXPORT(void DrawFilledCircle(int x, int y, int r, RGBA color, int antialias)){
 inheap:;
 
     colors = malloc(step<<2);
-
     goto fill;
 
 onstack:;
@@ -998,7 +1039,7 @@ onstack:;
 fill:;
 
     GLint *texCoords = calloc(8, step);
-    #pragma omp parallel for num_threads(2)
+
     for(unsigned int i = 0; i<step; i++){
         colors[i] = color;
     }
@@ -1009,17 +1050,17 @@ fill:;
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, step);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
     FreeEllipsePointsGL(vertex);
 
     free(texCoords);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         return;
 
     free(colors);
@@ -1043,7 +1084,7 @@ EXPORT(void DrawGradientCircle(int x, int y, int r, RGBA color[2], int antialias
     vertex[0] = x;
     vertex[1] = y;
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         goto onstack;
 
     RGBA  *colors = NULL;
@@ -1074,17 +1115,17 @@ fill:;
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+
+
     glDrawArrays(GL_TRIANGLE_FAN, 0, step);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+
+
 
     FreeEllipsePointsGL(vertex);
 
     free(texCoords);
 
-    if(step<0x50)
+    if(step<MAX_STACK_STEAL)
         return;
 
     free(colors);
