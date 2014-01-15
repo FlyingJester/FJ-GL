@@ -71,10 +71,6 @@ EXPORT(void GetDriverInfo(DriverInfo_t* driverinfo)){
 
 bool InternalInitVideo(int w, int h){
 
-
-    //omp_set_dynamic(0);     // Explicitly disable dynamic teams
-    //omp_set_num_threads(2); // Use 4 threads for all consecutive parallel regions
-
     Width = w;
     Height = h;
 
@@ -229,7 +225,7 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
 
     RGBA *newpixels = malloc(width*height*4);
 
-    #pragma omp parallel for num_threads(3)
+    #pragma omp parallel for num_threads(2)
     for(int i = 0; i<height; ++i){
         memcpy(newpixels+(i*width), pixels+(i*width), width*4);
     }
