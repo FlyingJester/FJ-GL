@@ -1,0 +1,36 @@
+import os
+import glob
+import sys
+
+defaultenv	= Environment(ENV = os.environ)
+
+linuxenv        = defaultenv.Clone(tools = ['default', 'textfile'], CCFLAGS = " -msse2 -flto -O2 -std=c11 -Wcast-align -g", LINK = "g++")
+
+windowsenv 	= defaultenv.Clone(CCFLAGS = "/O2 /EHsc")
+
+win32env	= windowsenv.Clone()
+win64env	= windowsenv.Clone()
+
+linux32env	= linuxenv.Clone()
+linux64env	= linuxenv.Clone()
+
+if sys.platform == 'win32' or sys.platform == 'win64':
+	currentenv = win32env.Clone()
+else:
+	if sys.platform == 'linux':
+		currentenv = linux32env.Clone()
+	else:
+		currentenv = linux64env.Clone()
+
+files = []
+
+shimfiles = []
+
+files.extend(glob.glob("*.cpp"))
+files.extend(glob.glob("*.c"))
+
+currentenv.Append(CPPFLAGS = ' -DC_Plus_Plus ', CCFLAGS = " -fopenmp ", LINKFLAGS = ' -fvisibility=default ');
+
+currentenv.Prepend(LIBS= ['GL', 'SDL', 'X11', 'dl', 'pthread', 'gomp'])
+
+currentenv.SharedLibrary("fj-gl", files)
