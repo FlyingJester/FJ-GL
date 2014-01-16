@@ -4,7 +4,7 @@ import sys
 
 defaultenv	= Environment(ENV = os.environ)
 
-linuxenv        = defaultenv.Clone(tools = ['default', 'textfile'], CCFLAGS = " -msse2 -flto -O2 -std=c11 -Wcast-align -g", LINK = "g++")
+linuxenv        = defaultenv.Clone(tools = ['default', 'textfile'], CCFLAGS = " -msse2 -flto -O2 -std=c11 -std=c++11 -Wcast-align -g", LINK = "g++")
 
 windowsenv 	= defaultenv.Clone(CCFLAGS = "/O2 /EHsc")
 
@@ -31,6 +31,6 @@ files.extend(glob.glob("*.c"))
 
 currentenv.Append(CPPFLAGS = ' -DC_Plus_Plus ', CCFLAGS = " -fopenmp ", LINKFLAGS = ' -fvisibility=default ');
 
-currentenv.Prepend(LIBS= ['GL', 'SDL', 'X11', 'dl', 'pthread', 'gomp'])
+currentenv.Prepend(LIBS= ['GL', 'SDL', 'X11', 'dl', 'pthread', 't5'])
 
 currentenv.SharedLibrary("fj-gl", files)

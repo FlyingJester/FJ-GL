@@ -22,6 +22,8 @@ extern GLboolean (APIENTRY * glIsShader)(GLuint);
 extern void (APIENTRY * glGetShaderInfoLog)(GLuint,  GLsizei,  GLsizei *,  GLchar *);
 extern void (APIENTRY * glGetProgramInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*);
 extern void (APIENTRY * glDeleteProgram)(GLuint);
+extern GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name);
+extern void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0);
 
 void LoadGLFunctions(void);
 

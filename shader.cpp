@@ -14,34 +14,69 @@ using std::string;
 GLuint CurrentShader = 0;
 GLuint DefaultShader = 0;
 
-const char *EmbeddedFrag =
-"                                                                       \
-#version 100                                                            \
-                                                                        \
-uniform sampler2D textureSampler;                                       \
-                                                                        \
-void main(void){                                                        \
-    vec4 texcolor = texture2D(textureSampler, gl_TexCoord[0].st);       \
-	gl_FragColor = texcolor*gl_Color;                                   \
-}                                                                       \
+const char *EmbeddedFrag110 =
+"                                                                       \n\
+#version 110                                                            \n\
+                                                                        \n\
+uniform sampler2D textureSampler;                                       \n\
+                                                                        \n\
+void main(void){                                                        \n\
+    vec4 texcolor = texture2D(textureSampler, gl_TexCoord[0].st);       \n\
+	gl_FragColor = texcolor*gl_Color;                                   \n\
+}                                                                       \n\
 ";
 
-const char *EmbeddedVert =
+const char *EmbeddedVert110 =
 "\
-#version 100                                                            \
-                                                                        \
-void main(void){                                                        \
-    gl_TexCoord[0] = gl_MultiTexCoord0;                                 \
-    gl_FrontColor = gl_Color;                                           \
-	gl_Position = gl_ModelViewProjectionMatrix*gl_Vertex;               \
-}                                                                       \
+#version 110                                                            \n\
+                                                                        \n\
+uniform float ScreenWidth;                                              \n\
+uniform float ScreenHeight;                                             \n\
+                                                                        \n\
+void main(void){                                                        \n\
+    gl_TexCoord[0] = gl_MultiTexCoord0;                                 \n\
+    gl_FrontColor = gl_Color;                                           \n\
+  //gl_Position = (Vertex/vec4(ScreenWidth/2.0, -ScreenHeight/2.0, 1.0, 1.0))-vec4(1.0, -1.0, 0.0, 0.0); \n\
+    gl_Position = gl_ModelViewProjectionMatrix*gl_Vertex;               \n\
+}                                                                       \n\
+";
+
+const char *EmbeddedFrag140 =
+"                                                                       \n\
+#version 140                                                            \n\
+                                                                        \n\
+uniform sampler2D textureSampler;                                       \n\
+in vec4 VColor;                                                         \n\
+                                                                        \n\
+void main(void){                                                        \n\
+    vec4 texcolor = texture2D(textureSampler, gl_TexCoord[0].st);       \n\
+	gl_FragColor = texcolor*VColor;                                     \n\
+}                                                                       \n\
+";
+
+const char *EmbeddedVert140 =
+"\
+#version 140                                                            \n\
+                                                                        \n\
+uniform float ScreenWidth;                                              \n\
+uniform float ScreenHeight;                                             \n\
+                                                                        \n\
+in vec2 Vertex;                                                         \n\
+in vec4 Color;                                                          \n\
+out vec4 VColor;                                                        \n\
+                                                                        \n\
+void main(void){                                                        \n\
+    gl_TexCoord[0] = gl_MultiTexCoord0;                                 \n\
+    VColor = Color;                                                     \n\
+    gl_Position = (vec4(Vertex, 1.0, 1.0)/vec4(ScreenWidth/2.0, -ScreenHeight/2.0, 1.0, 1.0))-vec4(1.0, -1.0, 0.0, 0.0); \n\
+}                                                                       \n\
 ";
 
 GLuint LoadEmbeddedShader(void){
 
     //Build the program
-    GLuint frag = TS_CreateShader(EmbeddedFrag, GL_FRAGMENT_SHADER);
-    GLuint vert = TS_CreateShader(EmbeddedVert, GL_VERTEX_SHADER);
+    GLuint frag = TS_CreateShader(EmbeddedFrag110, GL_FRAGMENT_SHADER);
+    GLuint vert = TS_CreateShader(EmbeddedVert110, GL_VERTEX_SHADER);
 
     GLuint prog = TS_CreateProgram(frag, vert);
 

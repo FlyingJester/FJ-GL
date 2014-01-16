@@ -38,6 +38,8 @@ GLboolean (APIENTRY * glIsShader)(GLuint) = NULL;
 void (APIENTRY * glGetShaderInfoLog)(GLuint,  GLsizei,  GLsizei *,  GLchar *) = NULL;
 void (APIENTRY * glGetProgramInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*) = NULL;
 void (APIENTRY * glDeleteProgram)(GLuint) = NULL;
+GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name) = NULL;
+void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0) = NULL;
 
 void TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
 	    GLint srcX, GLint srcY, GLint srcZ,
@@ -81,6 +83,8 @@ void LoadGLFunctions(void){
     GET_GL_FUNCTION(glGetShaderInfoLog,         (void (APIENTRY *)(GLuint,  GLsizei,  GLsizei *,  GLchar *)));
     GET_GL_FUNCTION(glGetProgramInfoLog,        (void (APIENTRY *)(GLuint, GLsizei, GLsizei*, GLchar*)));
     GET_GL_FUNCTION(glDeleteProgram,            (void (APIENTRY *)(GLuint)));
+    GET_GL_FUNCTION(glGetUniformLocation,      (GLint (APIENTRY *)(GLuint, const GLchar *)));
+    GET_GL_FUNCTION(glProgramUniform1f,         (void (APIENTRY *)(GLuint program, GLint location, GLfloat v0)));
 
     if(SDL_GL_GetProcAddress("glCopyImageSubData")!=NULL){
         glCopyImageSubData = (void(APIENTRY *)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) SDL_GL_GetProcAddress("glCopyImageSubData");

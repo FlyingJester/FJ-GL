@@ -7,6 +7,12 @@
 
 #define MAX_STACK_STEAL 0x80
 
+#include <X11/Xlib.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
+
+#include <SDL/SDL_syswm.h>
+
 unsigned int Scale = 1;
 unsigned int Width = 320;
 unsigned int Height= 240;
@@ -18,6 +24,9 @@ GLuint EmptyTexture = 0;
 GLuint TexCoordBuffer = 0;
 GLuint FullColorBuffer = 0;
 GLuint SeriousCoordBuffer = 0;
+Display *display;
+Window window;
+GLXContext glcontext;
 
 //SDL_GLContext glcontext;
 
@@ -109,7 +118,7 @@ bool InternalInitVideo(int w, int h){
     //SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,8);
     //SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,8);
     //SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    //SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
 
     const char *title = strcpy(malloc(100), "Sphere RPG Engine");
@@ -118,17 +127,25 @@ bool InternalInitVideo(int w, int h){
 
 
     void * s = SDL_SetVideoMode(Width*Scale, Height*Scale, 32, SDL_OPENGL);
-    // SDL_CreateWindow("Sphere RPG Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-     //   Width, Height, SDL_WINDOW_OPENGL);
-
-    //glcontext = SDL_GL_CreateContext(screen);
-    SDL_WM_SetCaption("Sphere RPG Engine", "Sphere");
-//        SetWindowTitle("Sphere RPG Engine");
 
     LoadGLFunctions();
 
     CurrentShader = LoadEmbeddedShader();
     DefaultShader = CurrentShader;
+    glUseProgram(CurrentShader);
+
+    GLint ScreenWidth = glGetUniformLocation(CurrentShader, "ScreenWidth");
+    GLint ScreenHeight = glGetUniformLocation(CurrentShader, "ScreenHeight");
+    if(ScreenWidth>=0){
+        float ScreenWidthVal = (float)Width;
+        glProgramUniform1f(CurrentShader, ScreenWidth, ScreenWidthVal);
+    }
+
+    if(ScreenHeight>=0){
+        float ScreenHeightVal = (float)Height;
+        glProgramUniform1f(CurrentShader, ScreenHeight, ScreenHeightVal);
+    }
+
     if(s==NULL){
         fprintf(stderr, "[FJ-GL] Error: Could not open window.\n\tError: %s\n", SDL_GetError());
     }
@@ -193,8 +210,8 @@ EXPORT(void CloseVideoDriver(void)){
     glDeleteBuffers(1, &FullColorBuffer);
     glDeleteTextures(1, &EmptyTexture);
 
- //   SDL_GL_DeleteContext(glcontext);
- //   SDL_DestroyWindow(screen);
+    //SDL_GL_DeleteContext(glcontext);
+    //SDL_DestroyWindow(screen);
 
 //	SDL_VideoQuit();
 
@@ -207,6 +224,7 @@ EXPORT(bool ToggleFullscreen(void)){
 }
 
 EXPORT(void FlipScreen(void)){
+    //glXSwapBuffers(display, window);
     SDL_GL_SwapBuffers();
     glClear(GL_COLOR_BUFFER_BIT);
 }
