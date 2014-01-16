@@ -28,27 +28,9 @@ Display *display;
 Window window;
 GLXContext glcontext;
 
-//SDL_GLContext glcontext;
-
-//SDL_Window *screen = NULL;
-
-inline bool Visible(int x, int y, int w, int  h){
-
-    return true;
-
-    if((x>Width)||(y>Height)||((x+w)<0)||((y+h)<0)){
-
-        return false;
-    }
-
-    return true;
-}
-
-inline bool Colored(unsigned int color){
-    return ((color&0x000000FF)!=0);
-}
-
 void *ScreenCopy = NULL;
+
+BlendMode currentBlendMode = bmBlend;
 
 void ResetOrtho(void){
 
@@ -154,6 +136,7 @@ bool InternalInitVideo(int w, int h){
     glEnable(GL_SCISSOR_TEST);
     ResetOrtho();
     glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	SDL_ShowCursor(0);
 
@@ -337,8 +320,6 @@ EXPORT(void DestroyImage(IMAGE * image)){
 }
 
 EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
-    if(!Visible(x, y, image->w, image->h))
-        return;
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
@@ -360,13 +341,57 @@ EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
 }
 
+/*
+
+        case CImage32::BLEND:
+            glBlendEquationEXT(GL_FUNC_ADD_EXT);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+
+        case CImage32::ADD:
+            glBlendEquationEXT(GL_FUNC_ADD_EXT);
+            glBlendFunc(GL_ONE, GL_ONE);
+            break;
+
+        case CImage32::SUBTRACT:
+            glBlendEquationEXT(GL_FUNC_REVERSE_SUBTRACT_EXT);
+            glBlendFunc(GL_ONE, GL_ONE);
+            break;
+
+        case CImage32::MULTIPLY:
+            glBlendEquationEXT(GL_FUNC_ADD_EXT);
+            glBlendFunc(GL_DST_COLOR, GL_ZERO);
+            break;
+
+        default:
+            glBlendEquationEXT(GL_FUNC_ADD_EXT);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+
+*/
+
+
 EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
 
-    if(!Colored(mask))
-        return;
-    if(!Visible(x, y, image->w, image->h))
-        return;
+    if(blendmode==bmBlend)
+        goto draw;
 
+    currentBlendMode = blendmode;
+
+    switch(blendmode){
+    case bmReplace:
+        glDisable(GL_BLEND);
+        break;
+    case bmSubtract:
+        glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+    case bmAdd:
+        glBlendFunc(GL_ONE, GL_ONE);
+        break;
+    case bmMultiply:
+        glBlendFunc(GL_DST_COLOR, GL_ZERO);
+    }
+
+draw:
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
@@ -381,11 +406,22 @@ EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-
-
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
+    if(blendmode==bmBlend)
+        return;
 
+    switch(blendmode){
+    case bmReplace:
+        glEnable(GL_BLEND);
+        return;
+    case bmSubtract:
+        glBlendEquation(GL_FUNC_ADD);
+    case bmMultiply:
+    case bmAdd:
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        return;
+    }
 
 }
 
@@ -411,9 +447,6 @@ EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blen
 
 }
 EXPORT(void TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
-
-    if(!Colored(mask))
-        return;
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
@@ -448,7 +481,6 @@ EXPORT(RGBA* LockImage(IMAGE * image)){
 
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
 
-
 fin:
     return image->pixels;
 
@@ -460,8 +492,6 @@ EXPORT(void UnlockImage(IMAGE * image)){
 }
 
 EXPORT(void DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
-    //if(!Visible(x, y, w, h))
-    //    return;
 
     IMAGE image;
 
@@ -515,8 +545,6 @@ EXPORT(void DirectGrab(int x, int y, int w, int h, RGBA* pixels)){
 
 EXPORT(void DrawPoint(int x, int y, RGBA color)){
 
-    if(!Colored(color))
-        return;
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, &color);
@@ -537,8 +565,6 @@ EXPORT(void DrawPoint(int x, int y, RGBA color)){
 }
 
 EXPORT(void DrawPointSeries(int** points, int length, RGBA color)){
-    if(!Colored(color))
-        return;
 
     if(!length)
         return;
@@ -598,16 +624,12 @@ fill:;
 }
 
 EXPORT(void DrawLine(int x[2], int y[2], RGBA color)){
-    if(!Colored(color))
-        return;
 
     GLint colors[] = {color, color};
     DrawGradientLine(x, y, colors);
 }
 
 EXPORT(void DrawGradientLine(int x[2], int y[2], RGBA colors[2])){
-    if(!(Colored(colors[0])|Colored(colors[1])))
-        return;
 
     GLint vertex[] = {x[0], y[0], x[1], y[1]};
 
@@ -620,16 +642,10 @@ EXPORT(void DrawGradientLine(int x[2], int y[2], RGBA colors[2])){
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-
-
     glDrawArrays(GL_LINES, 0, 2);
-
-
 }
 
 EXPORT(void DrawLineSeries(int** points, int length, RGBA color, int type)){
-    if(!Colored(color))
-        return;
 
     if(!length)
         return;
@@ -698,8 +714,6 @@ fill:;
 }
 
 EXPORT(void DrawTriangle(int x[3], int y[3], RGBA color)){
-    //if(!Colored(color))
-    //    return;
 
     GLint colors[] = {color, color, color};
 
@@ -728,8 +742,6 @@ EXPORT(void DrawGradientTriangle(int x[3], int y[3], RGBA colors[3])){
 
 }
 EXPORT(void DrawPolygon(int** points, int length, int invert, RGBA color)){
-    if(!Colored(color))
-        return;
 
     if(!length)
         return;
@@ -789,8 +801,6 @@ fill:;
 }
 
 EXPORT(void DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
-    if(!(Colored(colors[0])|Colored(colors[1])|Colored(colors[2])|Colored(colors[3])))
-        return;
 
     GLint vertex[] = {x, y, x+w, y, x+w, y+h, x, y+h};
 
@@ -811,8 +821,7 @@ EXPORT(void DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
 }
 
 EXPORT(void DrawRectangle(int x, int y, int w, int h, RGBA color)){
-    if(!Visible(x, y, w, h))
-        return;
+
     GLuint colors[] = {color, color, color, color};
 
     DrawGradientRectangle(x, y, w, h, colors);
@@ -821,8 +830,6 @@ EXPORT(void DrawRectangle(int x, int y, int w, int h, RGBA color)){
 
 
 EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA color)){
-    if(!Colored(color))
-        return;
 
     GLint vertex[] = {
         x, y,
@@ -854,8 +861,6 @@ EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA col
 }
 
 EXPORT(void DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color)){
-    if(!Colored(color))
-        return;
 
     const unsigned int step = M_PI*(float)((rx>ry)?rx:ry);
 
@@ -913,8 +918,7 @@ fill:;
 
 }
 EXPORT(void DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color)){
-    if(!Colored(color))
-        return;
+
     const unsigned int step = M_PI*(float)((rx>ry)?rx:ry);
 
     if(step<5){
@@ -970,8 +974,6 @@ fill:;
 }
 
 EXPORT(void DrawOutlinedCircle(int x, int y, int r, RGBA color, int antialias)){
-    if(!Colored(color))
-        return;
 
     if(r<3){
         DrawPoint(x, y, color);
@@ -1028,8 +1030,6 @@ fill:;
     free(colors);
 }
 EXPORT(void DrawFilledCircle(int x, int y, int r, RGBA color, int antialias)){
-    if(!Colored(color))
-        return;
 
     if(r<3){
         DrawPoint(x, y, color);
@@ -1084,9 +1084,6 @@ fill:;
     free(colors);
 }
 EXPORT(void DrawGradientCircle(int x, int y, int r, RGBA color[2], int antialias)){
-    if(!(Colored(color[0])|Colored(color[1])))
-        return;
-
 
     if(r<3){
         DrawPoint(x, y, *color);
