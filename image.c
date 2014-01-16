@@ -5,13 +5,13 @@
 
 EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
 
-    RGBA *newpixels = malloc(width*height*4);
+//    RGBA *newpixels = malloc(width*height*4);
 
-
+/*
     for(int i = 0; i<height; ++i){
         memcpy(newpixels+(i*width), pixels+(i*width), width*4);
     }
-
+*/
     GLuint texture = 0;
 
     glGenTextures(1, &texture);
@@ -21,7 +21,7 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
     IMAGE *im = malloc(sizeof(IMAGE));
-    im->pixels = newpixels;
+    im->pixels = NULL;//newpixels;
     im->texture = texture;
     im->w = width;
     im->h = height;

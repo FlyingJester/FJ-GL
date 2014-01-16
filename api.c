@@ -28,17 +28,17 @@ Display *display;
 Window window;
 GLXContext glcontext;
 
-inline bool Visible(int x, int y, int w, int h){
+inline bool NotVisible(int x, int y, int w, int h){
     if(x+w<ClipRectX)
-        return false;
+        return true;
     if(y+h<ClipRectY)
-        return false;
+        return true;
     if(x>ClipRectX+ClipRectW)
-        return false;
+        return true;
     if(y>ClipRectY+ClipRectH)
-        return false;
+        return true;
 
-    return true;
+    return false;
 
 }
 
@@ -98,6 +98,29 @@ inline void EndBlendMode(){
 end:
 
     currentBlendMode = bmBlend;
+
+}
+
+void CreateAveragedData(int x, int y, int w, int h, char *indata, char *outdata){
+    char *pixels = malloc((w*h)<<2);
+    glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+    for(int i = 0; i<w; ++i){
+        for(int e = 0; e<h; ++e){
+            size_t offset = i+(e*w);
+            offset<<=2;
+            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+            offset++;
+            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+            offset++;
+            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+            offset++;
+            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+
+        }
+    }
+
+    free(pixels);
 
 }
 
@@ -232,12 +255,20 @@ bool InternalInitVideo(int w, int h){
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 
-    GLuint fullcolor[] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
+    //GLuint fullcolor[] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
+    GLfloat fullcolor[] = {
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f
+    };
+
+
 
     glGenBuffers(1, &FullColorBuffer);
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLuint)*4, fullcolor, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<4, fullcolor, GL_STATIC_DRAW);
 
     GLfloat stexcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
@@ -313,17 +344,39 @@ EXPORT(void GetClippingRectangle(int* x, int* y, int* w, int* h)){
 
 }
 
+
+void CreateAveragedData(int x, int y, int w, int h, char *indata, char *outdata);
+
+
+void BlitImageMaskAverage(IMAGE *image, int x, int y, RGBA mask, BlendMode mask_blendmode){
+    RGBA *pixels = malloc((image->w*image->h)<<2);
+    CreateAveragedData(x, y, image->w, image->h, (char *)LockImage(image), (char *)pixels);
+
+    IMAGE *newimage = CreateImage(image->w, image->h, pixels);
+    BlitImageMask(newimage, x, y, bmReplace, mask, mask_blendmode);
+    DestroyImage(newimage);
+}
+
+void BlitImageAverage(IMAGE *image, int x, int y){
+    BlitImageMaskAverage(image, x, y, 0xFFFFFFFFu, bmBlend);
+}
+
 EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
-    if(!Visible(x, y, image->w, image->h))
+    if(NotVisible(x, y, image->w, image->h))
         return;
+
+    if(blendmode==bmAverage){
+        BlitImageAverage(image, x, y);
+        return;
+    }
 
     SetBlendMode(blendmode);
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, NULL);
+    glColorPointer(4, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -343,8 +396,13 @@ EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
 EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
 
-    if(!Visible(x, y, image->w, image->h))
+    if(NotVisible(x, y, image->w, image->h))
         return;
+
+    if(blendmode==bmAverage){
+        BlitImageMaskAverage(image, x, y, mask, mask_blendmode);
+        return;
+    }
 
     SetBlendMode(blendmode);
 
@@ -374,7 +432,7 @@ EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blen
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, NULL);
+    glColorPointer(4, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -440,7 +498,7 @@ EXPORT(void UnlockImage(IMAGE * image)){
 
 EXPORT(void DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
 
-    if(!Visible(x, y, w, h))
+    if(NotVisible(x, y, w, h))
         return;
 
     IMAGE image;
@@ -752,7 +810,7 @@ fill:;
 
 EXPORT(void DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
 
-    if(!Visible(x, y, w, h)){
+    if(NotVisible(x, y, w, h)){
         return;
     }
 
@@ -785,7 +843,7 @@ EXPORT(void DrawRectangle(int x, int y, int w, int h, RGBA color)){
 
 EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA color)){
 
-    if(!Visible(x, y, w, h))
+    if(NotVisible(x, y, w, h))
         return;
 
     if(!size)
