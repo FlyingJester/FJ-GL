@@ -2,6 +2,10 @@
 #define FJGL_GLEXTRA_HEAD
 #include <GL/gl.h>
 
+#ifndef GL_ZERO
+#define GL_ZERO	0
+#endif
+
 extern void (APIENTRY * glGenBuffers)(GLsizei, GLuint*);
 extern void (APIENTRY * glDeleteBuffers)(GLsizei, GLuint*);
 extern void (APIENTRY * glBindBuffer)(GLenum,  GLuint);
@@ -24,6 +28,7 @@ extern void (APIENTRY * glGetProgramInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*)
 extern void (APIENTRY * glDeleteProgram)(GLuint);
 extern GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name);
 extern void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0);
+extern void (APIENTRY * glBlendFuncSeparate)(GLenum, GLenum, GLenum, GLenum);
 
 void LoadGLFunctions(void);
 

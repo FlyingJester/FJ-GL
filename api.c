@@ -28,11 +28,25 @@ Display *display;
 Window window;
 GLXContext glcontext;
 
+inline bool Visible(int x, int y, int w, int h){
+    if(x+w<ClipRectX)
+        return false;
+    if(y+h<ClipRectY)
+        return false;
+    if(x>ClipRectX+ClipRectW)
+        return false;
+    if(y>ClipRectY+ClipRectH)
+        return false;
+
+    return true;
+
+}
+
 void *ScreenCopy = NULL;
 
 BlendMode currentBlendMode = bmBlend;
 
-void SetBlendMode(int blendmode){
+inline void SetBlendMode(int blendmode){
     if(blendmode==bmBlend)
         return;
 
@@ -41,23 +55,30 @@ void SetBlendMode(int blendmode){
     switch(blendmode){
     case bmReplace:
         glDisable(GL_BLEND);
-        break;
+        return;
     case bmSubtract:
         glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
     case bmAdd:
         glBlendFunc(GL_ONE, GL_ONE);
-        break;
+        return;
     case bmMultiply:
         glBlendFunc(GL_DST_COLOR, GL_ZERO);
+        return;
+    case bmRGB:
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+        return;
+    case bmAlpha:
+        glBlendFuncSeparate(GL_ZERO, GL_ONE, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        return;
+    case bmInvert:
+        glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_COLOR);
     }
 }
 
-void EndBlendMode(){
+inline void EndBlendMode(){
 
     if(currentBlendMode==bmBlend)
         return;
-
-
 
     switch(currentBlendMode){
     case bmReplace:
@@ -65,10 +86,13 @@ void EndBlendMode(){
         goto end;
     case bmSubtract:
         glBlendEquation(GL_FUNC_ADD);
+    case bmRGB:
+    case bmAlpha:
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    case bmInvert:
     case bmMultiply:
     case bmAdd:
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        goto end;
     }
 
 end:
@@ -104,7 +128,7 @@ EXPORT(void GetDriverInfo(DriverInfo_t* driverinfo)){
     driverinfo->name = "FJ-GL";
     driverinfo->author = "Martin McDonough";
     driverinfo->date = __DATE__;
-    driverinfo->version = "0.01";
+    driverinfo->version = "0.08";
     driverinfo->description = "A more modern OpenGL graphics backend for Sphere 1.5 and 1.6";
 
 }
@@ -120,6 +144,8 @@ bool InternalInitVideo(int w, int h){
     ClipRectY = 0;
     ClipRectW = w;
     ClipRectH = h;
+
+    SetClippingRectangle(0, 0, w, h);
 
     ScreenCopy = realloc(ScreenCopy, 4*w*h);
 
@@ -140,22 +166,22 @@ bool InternalInitVideo(int w, int h){
 
     //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
     //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,1);
-    //SDL_GL_SetAttribute(SDL_GL_RED_SIZE,8);
-    //SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,8);
-    //SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,8);
-    //SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,8);
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE,8);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,8);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,8);
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,8);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 8);
     //SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    //SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
 
-    const char *title = strcpy(malloc(100), "Sphere RPG Engine");
-
     SDL_ShowCursor(SDL_DISABLE);
-
 
     void * s = SDL_SetVideoMode(Width*Scale, Height*Scale, 32, SDL_OPENGL);
 
     LoadGLFunctions();
+
+    SDL_WM_SetCaption("Sphere RPG Engine", "Sphere");
 
     CurrentShader = LoadEmbeddedShader();
     DefaultShader = CurrentShader;
@@ -199,7 +225,7 @@ bool InternalInitVideo(int w, int h){
     GLfloat texcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
     glGenBuffers(1, &TexCoordBuffer);
-
+    glAlphaFunc(GL_NOTEQUAL, 0.0f);
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*8, texcoords, GL_STATIC_DRAW);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
@@ -287,90 +313,10 @@ EXPORT(void GetClippingRectangle(int* x, int* y, int* w, int* h)){
 
 }
 
-EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
-
-    RGBA *newpixels = malloc(width*height*4);
-
-
-    for(int i = 0; i<height; ++i){
-        memcpy(newpixels+(i*width), pixels+(i*width), width*4);
-    }
-//    memcpy(newpixels, pixels, width*height*4);
-
-    GLuint texture = 0;
-
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-    IMAGE *im = malloc(sizeof(IMAGE));
-    im->pixels = newpixels;
-    im->texture = texture;
-    im->w = width;
-    im->h = height;
-
-    return im;
-
-}
-
-EXPORT(IMAGE * CloneImage(IMAGE * image)){
-    GLuint texture = 0;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->w, image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glCopyImageSubData(image->texture, GL_TEXTURE_2D, 0, 0, 0, 0, texture, GL_TEXTURE_2D, 0, 0, 0, 0, image->w, image->h, 1);
-
-    IMAGE *im = malloc(sizeof(IMAGE));
-    im->pixels = NULL;
-    im->texture = texture;
-    im->w = image->w;
-    im->h = image->h;
-
-    return im;
-}
-
-EXPORT(IMAGE * GrabImage(IMAGE * image, int x, int y, int width, int height)){
-    glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
-
-    GLuint texture = 0;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
-
-    IMAGE *im = malloc(sizeof(IMAGE));
-    im->pixels = NULL;
-    im->texture = texture;
-    im->w = width;
-    im->h = height;
-
-    return im;
-
-}
-
-EXPORT(void DestroyImage(IMAGE * image)){
-    if(image->pixels)
-        free(image->pixels);
-    glDeleteTextures(1, &(image->texture));
-    free(image);
-}
-
 EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
+
+    if(!Visible(x, y, image->w, image->h))
+        return;
 
     SetBlendMode(blendmode);
 
@@ -396,6 +342,9 @@ EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
 
 EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
+
+    if(!Visible(x, y, image->w, image->h))
+        return;
 
     SetBlendMode(blendmode);
 
@@ -490,6 +439,9 @@ EXPORT(void UnlockImage(IMAGE * image)){
 }
 
 EXPORT(void DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
+
+    if(!Visible(x, y, w, h))
+        return;
 
     IMAGE image;
 
@@ -800,6 +752,10 @@ fill:;
 
 EXPORT(void DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
 
+    if(!Visible(x, y, w, h)){
+        return;
+    }
+
     GLint vertex[] = {x, y, x+w, y, x+w, y+h, x, y+h};
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
@@ -828,6 +784,12 @@ EXPORT(void DrawRectangle(int x, int y, int w, int h, RGBA color)){
 
 
 EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA color)){
+
+    if(!Visible(x, y, w, h))
+        return;
+
+    if(!size)
+        return;
 
     GLint vertex[] = {
         x, y,
