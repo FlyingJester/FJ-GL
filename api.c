@@ -32,6 +32,51 @@ void *ScreenCopy = NULL;
 
 BlendMode currentBlendMode = bmBlend;
 
+void SetBlendMode(int blendmode){
+    if(blendmode==bmBlend)
+        return;
+
+    currentBlendMode = blendmode;
+
+    switch(blendmode){
+    case bmReplace:
+        glDisable(GL_BLEND);
+        break;
+    case bmSubtract:
+        glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+    case bmAdd:
+        glBlendFunc(GL_ONE, GL_ONE);
+        break;
+    case bmMultiply:
+        glBlendFunc(GL_DST_COLOR, GL_ZERO);
+    }
+}
+
+void EndBlendMode(){
+
+    if(currentBlendMode==bmBlend)
+        return;
+
+
+
+    switch(currentBlendMode){
+    case bmReplace:
+        glEnable(GL_BLEND);
+        goto end;
+    case bmSubtract:
+        glBlendEquation(GL_FUNC_ADD);
+    case bmMultiply:
+    case bmAdd:
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        goto end;
+    }
+
+end:
+
+    currentBlendMode = bmBlend;
+
+}
+
 void ResetOrtho(void){
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -230,7 +275,7 @@ EXPORT(void SetClippingRectangle(int x, int y, int w, int h)){
     ClipRectW = w;
     ClipRectH = h;
 
-    glScissor(x, y, w, h);
+    glScissor(x, Height-h-y, w, h);
 
 }
 EXPORT(void GetClippingRectangle(int* x, int* y, int* w, int* h)){
@@ -258,6 +303,8 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
     glBindTexture(GL_TEXTURE_2D, texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
     IMAGE *im = malloc(sizeof(IMAGE));
@@ -277,6 +324,8 @@ EXPORT(IMAGE * CloneImage(IMAGE * image)){
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->w, image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glCopyImageSubData(image->texture, GL_TEXTURE_2D, 0, 0, 0, 0, texture, GL_TEXTURE_2D, 0, 0, 0, 0, image->w, image->h, 1);
@@ -299,6 +348,8 @@ EXPORT(IMAGE * GrabImage(IMAGE * image, int x, int y, int width, int height)){
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
 
@@ -321,6 +372,8 @@ EXPORT(void DestroyImage(IMAGE * image)){
 
 EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
+    SetBlendMode(blendmode);
+
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
@@ -337,61 +390,14 @@ EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-
+    EndBlendMode();
 
 }
-
-/*
-
-        case CImage32::BLEND:
-            glBlendEquationEXT(GL_FUNC_ADD_EXT);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            break;
-
-        case CImage32::ADD:
-            glBlendEquationEXT(GL_FUNC_ADD_EXT);
-            glBlendFunc(GL_ONE, GL_ONE);
-            break;
-
-        case CImage32::SUBTRACT:
-            glBlendEquationEXT(GL_FUNC_REVERSE_SUBTRACT_EXT);
-            glBlendFunc(GL_ONE, GL_ONE);
-            break;
-
-        case CImage32::MULTIPLY:
-            glBlendEquationEXT(GL_FUNC_ADD_EXT);
-            glBlendFunc(GL_DST_COLOR, GL_ZERO);
-            break;
-
-        default:
-            glBlendEquationEXT(GL_FUNC_ADD_EXT);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            break;
-
-*/
 
 
 EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
 
-    if(blendmode==bmBlend)
-        goto draw;
-
-    currentBlendMode = blendmode;
-
-    switch(blendmode){
-    case bmReplace:
-        glDisable(GL_BLEND);
-        break;
-    case bmSubtract:
-        glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
-    case bmAdd:
-        glBlendFunc(GL_ONE, GL_ONE);
-        break;
-    case bmMultiply:
-        glBlendFunc(GL_DST_COLOR, GL_ZERO);
-    }
-
-draw:
+    SetBlendMode(blendmode);
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
@@ -408,25 +414,14 @@ draw:
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-    if(blendmode==bmBlend)
-        return;
-
-    switch(blendmode){
-    case bmReplace:
-        glEnable(GL_BLEND);
-        return;
-    case bmSubtract:
-        glBlendEquation(GL_FUNC_ADD);
-    case bmMultiply:
-    case bmAdd:
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        return;
-    }
+    EndBlendMode();
 
 }
 
 EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blendmode)){
 
+    SetBlendMode(blendmode);
+
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
@@ -443,10 +438,12 @@ EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blen
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-
+    EndBlendMode();
 
 }
 EXPORT(void TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
+
+    SetBlendMode(blendmode);
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
 
@@ -465,6 +462,7 @@ EXPORT(void TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode 
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
+    EndBlendMode();
 
 }
 EXPORT(int GetImageWidth(IMAGE * image)){
