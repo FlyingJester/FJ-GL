@@ -30,6 +30,7 @@
 #include <stdio.h>
 
 #define CHANNEL_MASKS rmask, gmask, bmask, amask
+
 void (APIENTRY * glGenBuffers)(GLsizei, GLuint*) = NULL;
 void (APIENTRY * glDeleteBuffers)(GLsizei, GLuint*) = NULL;
 void (APIENTRY * glBindBuffer)(GLenum,  GLuint) = NULL;
@@ -97,6 +98,7 @@ void LoadGLFunctions(void){
     if(first)
         return;
     first = 1;
+
     GET_GL_FUNCTION(glGenBuffers,               (void (APIENTRY *)(GLsizei, GLuint*)));
     GET_GL_FUNCTION(glDeleteBuffers,            (void (APIENTRY *)(GLsizei, GLuint*)));
     GET_GL_FUNCTION(glBindBuffer,               (void (APIENTRY *)(GLenum, GLuint)));
@@ -119,7 +121,6 @@ void LoadGLFunctions(void){
     GET_GL_FUNCTION(glGetUniformLocation,      (GLint (APIENTRY *)(GLuint, const GLchar *)));
     GET_GL_FUNCTION(glProgramUniform1f,         (void (APIENTRY *)(GLuint program, GLint location, GLfloat v0)));
     GET_GL_FUNCTION(glBlendFuncSeparate,        (void (APIENTRY *)(GLenum, GLenum, GLenum, GLenum)));
-
 #ifdef __linux__
     if(SDL_GL_GetProcAddress("glCopyImageSubData")!=NULL){
         glCopyImageSubData = (void(APIENTRY *)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) SDL_GL_GetProcAddress("glCopyImageSubData");
@@ -136,11 +137,11 @@ void LoadGLFunctions(void){
 #else
     GET_GL_FUNCTION(glBlendEquation,        (void (APIENTRY *)(GLenum)));
 #endif
-	
+
 }
 
 #ifndef _WIN32
-void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
+void TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
 	    GLint srcX, GLint srcY, GLint srcZ,
 	    GLuint dstName, GLenum dstTarget, GLint dstLevel,
 	    GLint dstX, GLint dstY, GLint dstZ,
@@ -199,9 +200,9 @@ void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
 	    GLuint dstName, GLenum dstTarget, GLint dstLevel,
 	    GLint dstX, GLint dstY, GLint dstZ,
 	    GLsizei width, GLsizei height, GLsizei depth){
-	
+
 	void * pixels = malloc(width*height);
-      
+
     int srcwidth, srcheight, dstwidth, dstheight;
     glBindTexture(GL_TEXTURE_2D, dstName);
     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &dstwidth);
@@ -214,6 +215,6 @@ void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
     glBindTexture(GL_TEXTURE_2D, dstName);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     free(pixels);
-    
+
 }
 #endif

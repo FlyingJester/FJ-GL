@@ -46,6 +46,7 @@ HGLRC glcontext;
 #endif
 
 inline bool NotVisible(int x, int y, int w, int h){
+
     if(x+w<ClipRectX)
         return true;
     if(y+h<ClipRectY)
@@ -145,7 +146,7 @@ void CreateAveragedData(int x, int y, int w, int h, char *indata, char *outdata)
 }
 
 void ResetOrtho(void){
-	
+
     float scaleSize = (float)Scale;
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -188,9 +189,12 @@ EXPORT(void STDCALL ConfigureDriver(HWND parent)){
 bool InternalInitVideo(int w, int h){
 #elif defined (_WIN32)
 EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
-	
+
+#endif
     GLint ScreenWidth;
     GLint ScreenHeight;
+#ifdef _WIN32
+
 
 	PIXELFORMATDESCRIPTOR fd = {
 		sizeof(PIXELFORMATDESCRIPTOR),
@@ -214,16 +218,16 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
 
 #endif
     uint32_t white = 0xFFFFFFFF;
-	
+
     GLfloat texcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
-	   
+
 	GLfloat fullcolor[] = {
         1.0f, 1.0f, 1.0f, 1.0f,
         1.0f, 1.0f, 1.0f, 1.0f,
         1.0f, 1.0f, 1.0f, 1.0f,
         1.0f, 1.0f, 1.0f, 1.0f
     };
-	
+
     GLfloat stexcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
     Width = w;
@@ -261,7 +265,8 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,8);
     SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,8);
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,8);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL,0);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
     //SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
@@ -273,11 +278,11 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     LoadGLFunctions();
 
     SDL_WM_SetCaption("Sphere RPG Engine", "Sphere");
-	
+
 #elif defined (_WIN32)
-	
+
     SetWindowPos(window, HWND_TOPMOST, 0, 0, Width*Scale, Height*Scale, SWP_SHOWWINDOW);
-	
+
 	dc = GetDC(window);
 
 	pf = ChoosePixelFormat(dc, &fd);
@@ -325,7 +330,12 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
 	SDL_ShowCursor(0);
 #endif
 
+    glDepthMask(GL_FALSE);
+    glDisable(GL_DITHER);
+    glDisable(GL_MULTISAMPLE);
+    glDisable(GL_CULL_FACE);
     glEnable(GL_TEXTURE_2D);
+    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
     glGenTextures(1, &EmptyTexture);
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -392,6 +402,7 @@ EXPORT(bool STDCALL ToggleFullScreen(void)){
 }
 
 EXPORT(void STDCALL FlipScreen(void)){
+    glFlush();
 #ifdef __linux__
     SDL_GL_SwapBuffers();
 #elif defined (_WIN32)
@@ -486,6 +497,11 @@ EXPORT(void STDCALL BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmo
     if(NotVisible(x, y, image->w, image->h))
         return;
 
+    if(blendmode==bmBlend){ //Not compliant, but fixes MESA.
+        BlitImage(image, x, y, bmBlend);
+        return;
+    }
+
     if(blendmode==bmAverage){
         BlitImageMaskAverage(image, x, y, mask, mask_blendmode);
         return;
@@ -571,7 +587,7 @@ EXPORT(RGBA* STDCALL LockImage(IMAGE * image)){
     if(image->pixels)
         goto fin;
 
-    image->pixels = malloc(image->w*image->h*4);
+    image->pixels = malloc((image->w*image->h)<<2);
 
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
 
@@ -589,7 +605,7 @@ EXPORT(void STDCALL DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
 
     if(NotVisible(x, y, w, h))
         return;
-	{
+    {
 		IMAGE image;
 
 		glGenTextures(1, &(image.texture));
@@ -606,7 +622,8 @@ EXPORT(void STDCALL DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
 		BlitImage(&image, x, y, 0);
 
 		glDeleteTextures(1, &(image.texture));
-	}
+
+    }
 }
 
 EXPORT(void STDCALL DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels)){
@@ -756,7 +773,7 @@ EXPORT(void STDCALL DrawLineSeries(int** points, int length, RGBA color, int typ
 		{
 			RGBA  *colors = NULL;
 			GLint *vertex = NULL;
-			
+
 			if(length<MAX_STACK_STEAL)
 				goto onstack;
 
@@ -892,7 +909,7 @@ EXPORT(void STDCALL DrawGradientRectangle(int x, int y, int w, int h, RGBA color
     if(NotVisible(x, y, w, h)){
         return;
     }
-	
+
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
@@ -907,7 +924,7 @@ EXPORT(void STDCALL DrawGradientRectangle(int x, int y, int w, int h, RGBA color
 
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	
+
 
 }
 
@@ -965,11 +982,11 @@ EXPORT(void STDCALL DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color
         DrawPoint(x, y, color);
         return;
     }
-	
+
     vertex = ApproximateEllipseGL(x, y, rx, ry, step);
 	{
 		RGBA  *colors = NULL;
-	
+
 		if(step<MAX_STACK_STEAL)
 			goto onstack;
 
@@ -1027,7 +1044,7 @@ EXPORT(void STDCALL DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color))
 
 	{
 		RGBA  *colors = NULL;
-	
+
 		if(step<MAX_STACK_STEAL)
 			goto onstack;
 
@@ -1068,7 +1085,7 @@ EXPORT(void STDCALL DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color))
 }
 
 EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int antialias)){
-	
+
     const unsigned int step = (unsigned)(M_PI*((float)r));
 
 	GLint * vertex = NULL;
@@ -1081,7 +1098,7 @@ EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int anti
     vertex = ApproximateCircleGL(x, y, r, step);
 	{
 		RGBA  *colors = NULL;
-	
+
 		if(step<MAX_STACK_STEAL)
 			goto onstack;
 
@@ -1115,7 +1132,7 @@ EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int anti
 
 
 		FreeEllipsePointsGL(vertex);
-	
+
 		free(texCoords);
 		}
 		if(step<MAX_STACK_STEAL)
@@ -1125,7 +1142,7 @@ EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int anti
 	}
 }
 EXPORT(void STDCALL DrawFilledCircle(int x, int y, int r, RGBA color, int antialias)){
-	
+
     const unsigned int step = (unsigned)(M_PI*((float)r));
 	GLint * vertex = NULL;
 
@@ -1137,7 +1154,7 @@ EXPORT(void STDCALL DrawFilledCircle(int x, int y, int r, RGBA color, int antial
     vertex = ApproximateCircleGL(x, y, r, step);
 	{
 		RGBA  *colors = NULL;
-	
+
 		if(step<MAX_STACK_STEAL)
 			goto onstack;
 

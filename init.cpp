@@ -9,8 +9,11 @@
 extern "C" bool InitVideo(int, int, std::string);
 
 const char *rootDir = "";
+#ifdef _WIN32
 const char *shaderDir = "";
 const char *systemShader = "";
+#endif
+
 
 //extern "C" bool InitVideo (int, int, std::string) __attribute__ ((weak, alias ("_Z9InitVIdeoiiSs")));
 
@@ -26,7 +29,7 @@ bool InitVideo(int w, int h, std::string u){
 #else
 
 #include <Windows.h>
-BOOL WINAPI DllMain(  
+BOOL WINAPI DllMain(
          HINSTANCE hinstDLL,  // handle to DLL module
          DWORD fdwReason,     // reason for calling function
          LPVOID lpReserved )  // reserved

@@ -38,8 +38,7 @@ uniform float ScreenHeight;                                             \n\
 void main(void){                                                        \n\
     gl_TexCoord[0] = gl_MultiTexCoord0;                                 \n\
     gl_FrontColor = gl_Color;                                           \n\
-  //gl_Position = (Vertex/vec4(ScreenWidth/2.0, -ScreenHeight/2.0, 1.0, 1.0))-vec4(1.0, -1.0, 0.0, 0.0); \n\
-    gl_Position = gl_ModelViewProjectionMatrix*gl_Vertex;               \n\
+    gl_Position = (Vertex/vec4(ScreenWidth/2.0, -ScreenHeight/2.0, 1.0, 1.0))-vec4(1.0, -1.0, 0.0, 0.0); \n\
 }                                                                       \n\
 ";
 
