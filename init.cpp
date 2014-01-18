@@ -1,3 +1,5 @@
+
+#ifndef _WIN32
 #include "api.hpp"
 #include <cstdint>
 #include <t5.h>
@@ -20,3 +22,15 @@ bool InitVideo(int w, int h, std::string u){
 
 
 }
+
+#else
+
+#include <Windows.h>
+BOOL WINAPI DllMain(  
+         HINSTANCE hinstDLL,  // handle to DLL module
+         DWORD fdwReason,     // reason for calling function
+         LPVOID lpReserved )  // reserved
+{
+	return true;
+}
+#endif

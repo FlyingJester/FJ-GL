@@ -3,7 +3,7 @@
 #include "glExtra.h"
 
 
-EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
+EXPORT(IMAGE * STDCALL CreateImage(int width, int height, RGBA* pixels)){
 
 //    RGBA *newpixels = malloc(width*height*4);
 
@@ -13,6 +13,7 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
     }
 */
     GLuint texture = 0;
+    IMAGE *im = malloc(sizeof(IMAGE));
 
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -20,7 +21,6 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-    IMAGE *im = malloc(sizeof(IMAGE));
     im->pixels = NULL;//newpixels;
     im->texture = texture;
     im->w = width;
@@ -30,8 +30,9 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
 
 }
 
-EXPORT(IMAGE * CloneImage(IMAGE * image)){
+EXPORT(IMAGE * STDCALL CloneImage(IMAGE * image)){
     GLuint texture = 0;
+    IMAGE *im = malloc(sizeof(IMAGE));
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -41,7 +42,6 @@ EXPORT(IMAGE * CloneImage(IMAGE * image)){
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->w, image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glCopyImageSubData(image->texture, GL_TEXTURE_2D, 0, 0, 0, 0, texture, GL_TEXTURE_2D, 0, 0, 0, 0, image->w, image->h, 1);
 
-    IMAGE *im = malloc(sizeof(IMAGE));
     im->pixels = NULL;
     im->texture = texture;
     im->w = image->w;
@@ -50,10 +50,12 @@ EXPORT(IMAGE * CloneImage(IMAGE * image)){
     return im;
 }
 
-EXPORT(IMAGE * GrabImage(IMAGE * image, int x, int y, int width, int height)){
-    glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
+EXPORT(IMAGE * STDCALL GrabImage(IMAGE * image, int x, int y, int width, int height)){
 
     GLuint texture = 0;
+    IMAGE *im = malloc(sizeof(IMAGE));
+
+    glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -62,7 +64,6 @@ EXPORT(IMAGE * GrabImage(IMAGE * image, int x, int y, int width, int height)){
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
 
-    IMAGE *im = malloc(sizeof(IMAGE));
     im->pixels = NULL;
     im->texture = texture;
     im->w = width;
@@ -72,7 +73,7 @@ EXPORT(IMAGE * GrabImage(IMAGE * image, int x, int y, int width, int height)){
 
 }
 
-EXPORT(void DestroyImage(IMAGE * image)){
+EXPORT(void STDCALL DestroyImage(IMAGE * image)){
     if(image->pixels)
         free(image->pixels);
     glDeleteTextures(1, &(image->texture));

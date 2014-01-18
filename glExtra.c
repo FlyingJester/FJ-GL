@@ -1,8 +1,9 @@
 #include "glExtra.h"
 #define GL_GLEXT_PROTOTYPES 1
+
+#ifdef __linux__
 #include <SDL/SDL_opengl.h>
 #include <SDL/SDL.h>
-#include <stdio.h>
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     #define rmask 0xff000000
@@ -15,9 +16,20 @@
     #define bmask 0x00ff0000
     #define amask 0xff000000
 #endif
+#else
+
+//Very, very little-endian.
+
+    #define rmask 0x000000ff
+    #define gmask 0x0000ff00
+    #define bmask 0x00ff0000
+    #define amask 0xff000000
+
+#endif
+
+#include <stdio.h>
 
 #define CHANNEL_MASKS rmask, gmask, bmask, amask
-
 void (APIENTRY * glGenBuffers)(GLsizei, GLuint*) = NULL;
 void (APIENTRY * glDeleteBuffers)(GLsizei, GLuint*) = NULL;
 void (APIENTRY * glBindBuffer)(GLenum,  GLuint) = NULL;
@@ -41,22 +53,43 @@ void (APIENTRY * glDeleteProgram)(GLuint) = NULL;
 GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name) = NULL;
 void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0) = NULL;
 void (APIENTRY * glBlendFuncSeparate)(GLenum, GLenum, GLenum, GLenum) = NULL;
-
-void TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
+#ifdef _WIN32
+void (APIENTRY * glBlendEquation)(GLenum) = NULL;
+#endif
+void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
 	    GLint srcX, GLint srcY, GLint srcZ,
 	    GLuint dstName, GLenum dstTarget, GLint dstLevel,
 	    GLint dstX, GLint dstY, GLint dstZ,
 	    GLsizei width, GLsizei height, GLsizei depth);
+#ifdef __linux__
 #define CHECK_FOR_PROCESS(NAME){\
         if(SDL_GL_GetProcAddress(NAME)==NULL){\
         fprintf(stderr, "[FJ-GL] Init Error: " NAME " is not present in OpenGL library.\n");\
         exit(1);\
     }\
 }
+#else
+#define CHECK_FOR_PROCESS(NAME){\
+        if(wglGetProcAddress(NAME)==NULL){\
+        fprintf(stderr, "[FJ-GL] Init Error: " NAME " is not present in OpenGL library.\n");\
+        exit(1);\
+    }\
+}
 
+#endif
+
+
+#ifdef __linux__
 #define GET_GL_FUNCTION(NAME, TYPING)\
 CHECK_FOR_PROCESS( #NAME );\
 NAME = TYPING SDL_GL_GetProcAddress( #NAME )
+#else
+#define GET_GL_FUNCTION(NAME, TYPING)\
+CHECK_FOR_PROCESS( #NAME );\
+NAME = TYPING wglGetProcAddress( #NAME )
+
+#endif
+
 
 void LoadGLFunctions(void){
     static int first = 0;
@@ -64,7 +97,6 @@ void LoadGLFunctions(void){
     if(first)
         return;
     first = 1;
-
     GET_GL_FUNCTION(glGenBuffers,               (void (APIENTRY *)(GLsizei, GLuint*)));
     GET_GL_FUNCTION(glDeleteBuffers,            (void (APIENTRY *)(GLsizei, GLuint*)));
     GET_GL_FUNCTION(glBindBuffer,               (void (APIENTRY *)(GLenum, GLuint)));
@@ -88,6 +120,7 @@ void LoadGLFunctions(void){
     GET_GL_FUNCTION(glProgramUniform1f,         (void (APIENTRY *)(GLuint program, GLint location, GLfloat v0)));
     GET_GL_FUNCTION(glBlendFuncSeparate,        (void (APIENTRY *)(GLenum, GLenum, GLenum, GLenum)));
 
+#ifdef __linux__
     if(SDL_GL_GetProcAddress("glCopyImageSubData")!=NULL){
         glCopyImageSubData = (void(APIENTRY *)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) SDL_GL_GetProcAddress("glCopyImageSubData");
     }
@@ -100,10 +133,14 @@ void LoadGLFunctions(void){
         glCopyImageSubData = TS_CopyImageSubData;
         fprintf(stderr, "[FJ-GL] Init Warning: glCopyImageSubData is not available, and hardware fallbacks are not available. Emulating in software.\n");
     }
+#else
+    GET_GL_FUNCTION(glBlendEquation,        (void (APIENTRY *)(GLenum)));
+#endif
+	
 }
 
-
-void TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
+#ifndef _WIN32
+void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
 	    GLint srcX, GLint srcY, GLint srcZ,
 	    GLuint dstName, GLenum dstTarget, GLint dstLevel,
 	    GLint dstX, GLint dstY, GLint dstZ,
@@ -155,3 +192,28 @@ void TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
         free(pixels);
     }
 }
+#else
+
+void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
+	    GLint srcX, GLint srcY, GLint srcZ,
+	    GLuint dstName, GLenum dstTarget, GLint dstLevel,
+	    GLint dstX, GLint dstY, GLint dstZ,
+	    GLsizei width, GLsizei height, GLsizei depth){
+	
+	void * pixels = malloc(width*height);
+      
+    int srcwidth, srcheight, dstwidth, dstheight;
+    glBindTexture(GL_TEXTURE_2D, dstName);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &dstwidth);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &dstheight);
+    glBindTexture(GL_TEXTURE_2D, srcName);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &srcwidth);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &srcheight);
+
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glBindTexture(GL_TEXTURE_2D, dstName);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    free(pixels);
+    
+}
+#endif

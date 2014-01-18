@@ -6,12 +6,23 @@
 #include <stdio.h>
 
 #define MAX_STACK_STEAL 0x80
-
-#include <X11/Xlib.h>
+#ifdef _WIN32
+#include <Windows.h>
+#include <Wingdi.h>
+#include <malloc.h>
+#define alloca _alloca
+#define GL_GLEXT_PROTOTYPES 1
+#define GL3_PROTOTYPES 1
+#endif
 #include <GL/gl.h>
+#ifdef __linux__
+#include <X11/Xlib.h>
 #include <GL/glx.h>
-
 #include <SDL/SDL_syswm.h>
+#endif
+
+GLuint CurrentShader = 0;
+GLuint DefaultShader = 0;
 
 unsigned int Scale = 1;
 unsigned int Width = 320;
@@ -24,9 +35,15 @@ GLuint EmptyTexture = 0;
 GLuint TexCoordBuffer = 0;
 GLuint FullColorBuffer = 0;
 GLuint SeriousCoordBuffer = 0;
+
+#ifdef __linux__
 Display *display;
 Window window;
 GLXContext glcontext;
+#elif defined(_WIN32)
+HDC dc;
+HGLRC glcontext;
+#endif
 
 inline bool NotVisible(int x, int y, int w, int h){
     if(x+w<ClipRectX)
@@ -42,7 +59,7 @@ inline bool NotVisible(int x, int y, int w, int h){
 
 }
 
-void *ScreenCopy = NULL;
+uint32_t *ScreenCopy = NULL;
 
 BlendMode currentBlendMode = bmBlend;
 
@@ -103,19 +120,22 @@ end:
 
 void CreateAveragedData(int x, int y, int w, int h, char *indata, char *outdata){
     char *pixels = malloc((w*h)<<2);
+	int i;
+	int e;
+
     glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-    for(int i = 0; i<w; ++i){
-        for(int e = 0; e<h; ++e){
+    for(i = 0; i<w; ++i){
+        for(e = 0; e<h; ++e){
             size_t offset = i+(e*w);
             offset<<=2;
-            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+            outdata[offset] = ((pixels[offset])>>1) + ((indata[offset])>>1);
             offset++;
-            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+            outdata[offset] = ((pixels[offset])>>1) + ((indata[offset])>>1);
             offset++;
-            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+            outdata[offset] = ((pixels[offset])>>1) + ((indata[offset])>>1);
             offset++;
-            outdata[offset] = pixels[offset]>>1 + indata[offset]>>1;
+            outdata[offset] = ((pixels[offset])>>1) + ((indata[offset])>>1);
 
         }
     }
@@ -125,16 +145,17 @@ void CreateAveragedData(int x, int y, int w, int h, char *indata, char *outdata)
 }
 
 void ResetOrtho(void){
+	
+    float scaleSize = (float)Scale;
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    float scaleSize = Scale;
 
     if(scaleSize==0){
         //ideally just disable video altogether.
         scaleSize = 1;
     }
-    glViewport(0, 0, Width*scaleSize, Height*scaleSize);
-    glScissor(0, 0, Width*scaleSize, Height*scaleSize);
+    glViewport(0, 0, Width*(int)scaleSize, Height*(int)scaleSize);
+    glScissor(0, 0, Width*(int)scaleSize, Height*(int)scaleSize);
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -147,7 +168,7 @@ void ResetOrtho(void){
     glLoadIdentity();
 }
 
-EXPORT(void GetDriverInfo(DriverInfo_t* driverinfo)){
+EXPORT(void STDCALL GetDriverInfo(DriverInfo_t* driverinfo)){
     driverinfo->name = "FJ-GL";
     driverinfo->author = "Martin McDonough";
     driverinfo->date = __DATE__;
@@ -156,7 +177,54 @@ EXPORT(void GetDriverInfo(DriverInfo_t* driverinfo)){
 
 }
 
+#ifdef _WIN32
+
+EXPORT(void STDCALL ConfigureDriver(HWND parent)){
+	return;
+}
+#endif
+
+#ifdef __linux__
 bool InternalInitVideo(int w, int h){
+#elif defined (_WIN32)
+EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
+	
+    GLint ScreenWidth;
+    GLint ScreenHeight;
+
+	PIXELFORMATDESCRIPTOR fd = {
+		sizeof(PIXELFORMATDESCRIPTOR),
+		1,
+		PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER | PFD_TYPE_RGBA,
+		32,
+		0, 0, 0, 0, 0, 0,
+		0,
+		0,
+		0,
+		0, 0, 0, 0,
+		0,
+		0,
+		0,
+		PFD_MAIN_PLANE,
+		0,
+		0, 0, 0
+	};
+
+	int pf;
+
+#endif
+    uint32_t white = 0xFFFFFFFF;
+	
+    GLfloat texcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+	   
+	GLfloat fullcolor[] = {
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f
+    };
+	
+    GLfloat stexcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
     Width = w;
     Height = h;
@@ -171,7 +239,7 @@ bool InternalInitVideo(int w, int h){
     SetClippingRectangle(0, 0, w, h);
 
     ScreenCopy = realloc(ScreenCopy, 4*w*h);
-
+#ifdef __linux__
     if(SDL_WasInit(SDL_INIT_EVERYTHING)==0){
         fprintf(stderr, "[FJ-GL] Warning: SDL2 was not initialized.\n\tError: %s\n", SDL_GetError());
         SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK);
@@ -205,13 +273,29 @@ bool InternalInitVideo(int w, int h){
     LoadGLFunctions();
 
     SDL_WM_SetCaption("Sphere RPG Engine", "Sphere");
+	
+#elif defined (_WIN32)
+	
+    SetWindowPos(window, HWND_TOPMOST, 0, 0, Width*Scale, Height*Scale, SWP_SHOWWINDOW);
+	
+	dc = GetDC(window);
+
+	pf = ChoosePixelFormat(dc, &fd);
+
+	SetPixelFormat(dc, pf, &fd);
+
+	glcontext = wglCreateContext(dc);
+
+	wglMakeCurrent(dc, glcontext);
+
+#endif
 
     CurrentShader = LoadEmbeddedShader();
     DefaultShader = CurrentShader;
     glUseProgram(CurrentShader);
 
-    GLint ScreenWidth = glGetUniformLocation(CurrentShader, "ScreenWidth");
-    GLint ScreenHeight = glGetUniformLocation(CurrentShader, "ScreenHeight");
+    ScreenWidth = glGetUniformLocation(CurrentShader, "ScreenWidth");
+    ScreenHeight = glGetUniformLocation(CurrentShader, "ScreenHeight");
     if(ScreenWidth>=0){
         float ScreenWidthVal = (float)Width;
         glProgramUniform1f(CurrentShader, ScreenWidth, ScreenWidthVal);
@@ -222,9 +306,13 @@ bool InternalInitVideo(int w, int h){
         glProgramUniform1f(CurrentShader, ScreenHeight, ScreenHeightVal);
     }
 
+#ifdef __linux__
+
     if(s==NULL){
         fprintf(stderr, "[FJ-GL] Error: Could not open window.\n\tError: %s\n", SDL_GetError());
     }
+
+#endif
 
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_SCISSOR_TEST);
@@ -232,9 +320,11 @@ bool InternalInitVideo(int w, int h){
     glEnable(GL_BLEND);
     glBlendEquation(GL_FUNC_ADD);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	SDL_ShowCursor(0);
 
-    uint32_t white = 0xFFFFFFFF;
+#ifdef __linux__
+	SDL_ShowCursor(0);
+#endif
+
     glEnable(GL_TEXTURE_2D);
     glGenTextures(1, &EmptyTexture);
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
@@ -245,7 +335,6 @@ bool InternalInitVideo(int w, int h){
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
 
-    GLfloat texcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
     glGenBuffers(1, &TexCoordBuffer);
     glAlphaFunc(GL_NOTEQUAL, 0.0f);
@@ -256,12 +345,7 @@ bool InternalInitVideo(int w, int h){
 
 
     //GLuint fullcolor[] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
-    GLfloat fullcolor[] = {
-        1.0f, 1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f, 1.0f
-    };
+
 
 
 
@@ -269,8 +353,6 @@ bool InternalInitVideo(int w, int h){
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<4, fullcolor, GL_STATIC_DRAW);
-
-    GLfloat stexcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
     glGenBuffers(1, &SeriousCoordBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, SeriousCoordBuffer);
@@ -284,7 +366,7 @@ bool InternalInitVideo(int w, int h){
 
 }
 
-EXPORT(void CloseVideoDriver(void)){
+EXPORT(void STDCALL CloseVideoDriver(void)){
 
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
@@ -299,29 +381,33 @@ EXPORT(void CloseVideoDriver(void)){
     //SDL_DestroyWindow(screen);
 
 //	SDL_VideoQuit();
-
+#ifdef __linux__
     SDL_Quit();
+#endif
     free(ScreenCopy);
 
 }
-EXPORT(bool ToggleFullscreen(void)){
+EXPORT(bool STDCALL ToggleFullScreen(void)){
     return true;
 }
 
-EXPORT(void FlipScreen(void)){
-    //glXSwapBuffers(display, window);
+EXPORT(void STDCALL FlipScreen(void)){
+#ifdef __linux__
     SDL_GL_SwapBuffers();
+#elif defined (_WIN32)
+	SwapBuffers(dc);
+#endif
     glClear(GL_COLOR_BUFFER_BIT);
 }
-EXPORT(void SetClippingRectangle(int x, int y, int w, int h)){
+EXPORT(void STDCALL SetClippingRectangle(int x, int y, int w, int h)){
 
-    if(w>Width)
-        w=Width;
-    if(h>Height)
-        w=Width;
-    if(x<0)
+    if((unsigned)w>Width)
+        w=(int)Width;
+    if((unsigned)h>Height)
+        w=(int)Width;
+    if((unsigned)x<0)
         x=0;
-    if(y<0)
+    if((unsigned)y<0)
         y=0;
 
     if((x==ClipRectX)&&(y==ClipRectY)&&(w==ClipRectW)&&(h==ClipRectH))
@@ -335,7 +421,7 @@ EXPORT(void SetClippingRectangle(int x, int y, int w, int h)){
     glScissor(x, Height-h-y, w, h);
 
 }
-EXPORT(void GetClippingRectangle(int* x, int* y, int* w, int* h)){
+EXPORT(void STDCALL GetClippingRectangle(int* x, int* y, int* w, int* h)){
 
     *x = ClipRectX;
     *y = ClipRectY;
@@ -350,9 +436,10 @@ void CreateAveragedData(int x, int y, int w, int h, char *indata, char *outdata)
 
 void BlitImageMaskAverage(IMAGE *image, int x, int y, RGBA mask, BlendMode mask_blendmode){
     RGBA *pixels = malloc((image->w*image->h)<<2);
+    IMAGE *newimage = CreateImage(image->w, image->h, pixels);
+
     CreateAveragedData(x, y, image->w, image->h, (char *)LockImage(image), (char *)pixels);
 
-    IMAGE *newimage = CreateImage(image->w, image->h, pixels);
     BlitImageMask(newimage, x, y, bmReplace, mask, mask_blendmode);
     DestroyImage(newimage);
 }
@@ -361,7 +448,7 @@ void BlitImageAverage(IMAGE *image, int x, int y){
     BlitImageMaskAverage(image, x, y, 0xFFFFFFFFu, bmBlend);
 }
 
-EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
+EXPORT(void STDCALL BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 
     if(NotVisible(x, y, image->w, image->h))
         return;
@@ -380,11 +467,11 @@ EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+	{
+		GLint vertex[] = {x, y, x+image->w, y, x+image->w, y+image->h, x, y+image->h};
 
-    GLint vertex[] = {x, y, x+image->w, y, x+image->w, y+image->h, x, y+image->h};
-
-    glVertexPointer(2, GL_INT, 0, vertex);
-
+		glVertexPointer(2, GL_INT, 0, vertex);
+	}
 
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -394,7 +481,7 @@ EXPORT(void BlitImage(IMAGE * image, int x, int y, BlendMode blendmode)){
 }
 
 
-EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
+EXPORT(void STDCALL BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
 
     if(NotVisible(x, y, image->w, image->h))
         return;
@@ -407,25 +494,26 @@ EXPORT(void BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA
     SetBlendMode(blendmode);
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
+	{
+		GLuint color[] = {mask, mask, mask, mask};
 
-    GLuint color[] = {mask, mask, mask, mask};
-
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
+	}
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+	{
+		GLint vertex[] = {x, y, x+image->w, y, x+image->w, y+image->h, x, y+image->h};
 
-    GLint vertex[] = {x, y, x+image->w, y, x+image->w, y+image->h, x, y+image->h};
-
-    glVertexPointer(2, GL_INT, 0, vertex);
-
+		glVertexPointer(2, GL_INT, 0, vertex);
+	}
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
     EndBlendMode();
 
 }
 
-EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blendmode)){
+EXPORT(void STDCALL TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blendmode)){
 
     SetBlendMode(blendmode);
 
@@ -436,11 +524,11 @@ EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blen
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+	{
+		GLint vertex[] = {x[0], y[0], x[1], y[1], x[2], y[2], x[3], y[3]};
 
-    GLint vertex[] = {x[0], y[0], x[1], y[1], x[2], y[2], x[3], y[3]};
-
-    glVertexPointer(2, GL_INT, 0, vertex);
-
+		glVertexPointer(2, GL_INT, 0, vertex);
+	}
 
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -448,23 +536,24 @@ EXPORT(void TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendMode blen
     EndBlendMode();
 
 }
-EXPORT(void TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
+EXPORT(void STDCALL TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode blendmode, RGBA mask, BlendMode mask_blendmode)){
 
     SetBlendMode(blendmode);
 
     glBindTexture(GL_TEXTURE_2D, image->texture);
+	{
+		GLuint color[] = {mask, mask, mask, mask};
 
-    GLuint color[] = {mask, mask, mask, mask};
-
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+	{
+		GLint vertex[] = {x[0], y[0], x[1], y[1], x[2], y[2], x[3], y[3]};
 
-    GLint vertex[] = {x[0], y[0], x[1], y[1], x[2], y[2], x[3], y[3]};
-
-    glVertexPointer(2, GL_INT, 0, vertex);
-
+		glVertexPointer(2, GL_INT, 0, vertex);
+	}
 
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -472,13 +561,13 @@ EXPORT(void TransformBlitImageMask(IMAGE * image, int x[4], int y[4], BlendMode 
     EndBlendMode();
 
 }
-EXPORT(int GetImageWidth(IMAGE * image)){
+EXPORT(int STDCALL GetImageWidth(IMAGE * image)){
     return image->w;
 }
-EXPORT(int GetImageHeight(IMAGE * image)){
+EXPORT(int STDCALL GetImageHeight(IMAGE * image)){
     return image->h;
 }
-EXPORT(RGBA* LockImage(IMAGE * image)){
+EXPORT(RGBA* STDCALL LockImage(IMAGE * image)){
     if(image->pixels)
         goto fin;
 
@@ -491,36 +580,36 @@ fin:
 
 }
 
-EXPORT(void UnlockImage(IMAGE * image)){
+EXPORT(void STDCALL UnlockImage(IMAGE * image)){
     glBindTexture(GL_TEXTURE_2D, image->texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->w, image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
 }
 
-EXPORT(void DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
+EXPORT(void STDCALL DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
 
     if(NotVisible(x, y, w, h))
         return;
+	{
+		IMAGE image;
 
-    IMAGE image;
+		glGenTextures(1, &(image.texture));
 
-    glGenTextures(1, &(image.texture));
+		glBindTexture(GL_TEXTURE_2D, image.texture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-    glBindTexture(GL_TEXTURE_2D, image.texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+		image.pixels = NULL;
+		image.w = w;
+		image.h = h;
 
-    image.pixels = NULL;
-    image.w = w;
-    image.h = h;
+		BlitImage(&image, x, y, 0);
 
-    BlitImage(&image, x, y, 0);
-
-    glDeleteTextures(1, &(image.texture));
-
+		glDeleteTextures(1, &(image.texture));
+	}
 }
 
-EXPORT(void DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels)){
+EXPORT(void STDCALL DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels)){
 
     IMAGE image;
 
@@ -541,17 +630,19 @@ EXPORT(void DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels))
     //DestroyImage(image);
 }
 
-EXPORT(void DirectGrab(int x, int y, int w, int h, RGBA* pixels)){
+EXPORT(void STDCALL DirectGrab(int x, int y, int w, int h, RGBA* pixels)){
+	int i = 0;
+
     glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);
 
 
-    for(int i = 0; i<h; ++i){
+    for(i = 0; i<h; ++i){
         memcpy(pixels+((i*w)<<2), ScreenCopy+((h-i)*w<<2), w<<2);
     }
 
 }
 
-EXPORT(void DrawPoint(int x, int y, RGBA color)){
+EXPORT(void STDCALL DrawPoint(int x, int y, RGBA color)){
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
@@ -559,11 +650,11 @@ EXPORT(void DrawPoint(int x, int y, RGBA color)){
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+	{
+		GLint vertex[] = {x, y};
 
-    GLint vertex[] = {x, y};
-
-    glVertexPointer(2, GL_INT, 0, vertex);
-
+		glVertexPointer(2, GL_INT, 0, vertex);
+	}
 
 
     glDrawArrays(GL_POINTS, 0, 1);
@@ -572,72 +663,65 @@ EXPORT(void DrawPoint(int x, int y, RGBA color)){
 
 }
 
-EXPORT(void DrawPointSeries(int** points, int length, RGBA color)){
+EXPORT(void STDCALL DrawPointSeries(int** points, int length, RGBA color)){
 
     if(!length)
         return;
 
     if(length<MAX_STACK_STEAL)
         goto onstack;
+	{
+		RGBA  *colors = NULL;
+		GLint *vertex = NULL;
 
-    RGBA  *colors = NULL;
-    GLint *vertex = NULL;
+		colors = malloc(4*length);
 
-inheap:;
+		vertex = malloc(8*length);
 
-    colors = malloc(4*length);
+		goto fill;
 
-    vertex = malloc(8*length);
-
-    goto fill;
-
-onstack:;
+	onstack:;
 
 
-    colors = alloca(4*length);
+		colors = alloca(4*length);
 
-    vertex = alloca(8*length);
+		vertex = alloca(8*length);
 
-fill:;
+	fill:;
+		 {
+			GLint *texCoords = calloc(8, length);
+			int i = 0;
 
-    GLint *texCoords = calloc(8, length);
+			for(i = 0; i<length; ++i){
+				colors[i] = color;
+				vertex[(i*2)  ] = points[i][0];
+				vertex[(i*2)+1] = points[i][1];
+			}
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+			glTexCoordPointer(2, GL_INT, 0, texCoords);
+			glVertexPointer(2, GL_INT, 0, vertex);
+			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
+			glDrawArrays(GL_POINTS, 0, length);
 
-    for(int i = 0; i<length; ++i){
-        colors[i] = color;
-        vertex[(i*2)  ] = points[i][0];
-        vertex[(i*2)+1] = points[i][1];
-    }
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			free(texCoords);
+		 }
+		if(length<MAX_STACK_STEAL)
+			return;
 
+		free(colors);
+		free(vertex);
 
-
-
-    glDrawArrays(GL_POINTS, 0, length);
-
-
-
-    free(texCoords);
-
-    if(length<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
-    free(vertex);
-
-
+	}
 }
 
-EXPORT(void DrawLine(int x[2], int y[2], RGBA color)){
+EXPORT(void STDCALL DrawLine(int x[2], int y[2], RGBA color)){
 
     GLint colors[] = {color, color};
     DrawGradientLine(x, y, colors);
 }
 
-EXPORT(void DrawGradientLine(int x[2], int y[2], RGBA colors[2])){
+EXPORT(void STDCALL DrawGradientLine(int x[2], int y[2], RGBA colors[2])){
 
     GLint vertex[] = {x[0], y[0], x[1], y[1]};
 
@@ -653,82 +737,79 @@ EXPORT(void DrawGradientLine(int x[2], int y[2], RGBA colors[2])){
     glDrawArrays(GL_LINES, 0, 2);
 }
 
-EXPORT(void DrawLineSeries(int** points, int length, RGBA color, int type)){
+EXPORT(void STDCALL DrawLineSeries(int** points, int length, RGBA color, int type)){
 
     if(!length)
         return;
 
-    if(length<MAX_STACK_STEAL)
-        goto onstack;
+	{
+		GLenum gltype = GL_LINES;
 
-    GLenum gltype = GL_LINES;
+		switch (type){
+		case 1:
+			gltype = GL_LINE_STRIP;
+			break;
+		case 2:
+			gltype = GL_LINE_LOOP;
+		}
 
-    switch (type){
-    case 1:
-        gltype = GL_LINE_STRIP;
-        break;
-    case 2:
-        gltype = GL_LINE_LOOP;
-    }
+		{
+			RGBA  *colors = NULL;
+			GLint *vertex = NULL;
+			
+			if(length<MAX_STACK_STEAL)
+				goto onstack;
 
-    RGBA  *colors = NULL;
-    GLint *vertex = NULL;
+			colors = malloc(4*length);
 
-inheap:;
+			vertex = malloc(8*length);
 
-    colors = malloc(4*length);
+			goto fill;
 
-    vertex = malloc(8*length);
-
-    goto fill;
-
-onstack:;
-
-
-    colors = alloca(4*length);
-
-    vertex = alloca(8*length);
-
-fill:;
-
-    GLint *texCoords = calloc(8, length);
+		onstack:;
 
 
-    for(int i = 0; i<length; ++i){
-        colors[i] = color;
-        vertex[(i*2)  ] = points[i][0];
-        vertex[(i*2)+1] = points[i][1];
-    }
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
+			colors = alloca(4*length);
 
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			vertex = alloca(8*length);
 
+		fill:;
+			 {
+				GLint *texCoords = calloc(8, length);
+				int i = 0;
 
+				for(i; i<length; ++i){
+					colors[i] = color;
+					vertex[(i*2)  ] = points[i][0];
+					vertex[(i*2)+1] = points[i][1];
+				}
+				glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+				glTexCoordPointer(2, GL_INT, 0, texCoords);
+				glVertexPointer(2, GL_INT, 0, vertex);
 
-    glDrawArrays(gltype, 0, length);
+				glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
+				glDrawArrays(gltype, 0, length);
 
+				free(texCoords);
+			}
+			if(length<MAX_STACK_STEAL)
+				return;
 
-
-    free(texCoords);
-
-    if(length<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
-    free(vertex);
+			free(colors);
+			free(vertex);
+		}
+	}
 }
 
-EXPORT(void DrawTriangle(int x[3], int y[3], RGBA color)){
+EXPORT(void STDCALL DrawTriangle(int x[3], int y[3], RGBA color)){
 
     GLint colors[] = {color, color, color};
 
     DrawGradientTriangle(x, y, colors);
 }
 
-EXPORT(void DrawGradientTriangle(int x[3], int y[3], RGBA colors[3])){
+EXPORT(void STDCALL DrawGradientTriangle(int x[3], int y[3], RGBA colors[3])){
     //if(!(Colored(colors[0])|Colored(colors[1])|Colored(colors[2])))
     //    return;
     GLint vertex[] = {x[0], y[0], x[1], y[1], x[2], y[2]};
@@ -749,72 +830,69 @@ EXPORT(void DrawGradientTriangle(int x[3], int y[3], RGBA colors[3])){
 
 
 }
-EXPORT(void DrawPolygon(int** points, int length, int invert, RGBA color)){
+EXPORT(void STDCALL DrawPolygon(int** points, int length, int invert, RGBA color)){
 
     if(!length)
         return;
 
     if(length<MAX_STACK_STEAL)
         goto onstack;
+	{
+		RGBA  *colors = NULL;
+		GLuint *vertex = NULL;
 
-    RGBA  *colors = NULL;
-    GLuint *vertex = NULL;
+		colors = malloc(4*length);
 
-inheap:;
+		vertex = malloc(8*length);
 
-    colors = malloc(4*length);
+		goto fill;
 
-    vertex = malloc(8*length);
-
-    goto fill;
-
-onstack:;
+	onstack:;
 
 
-    colors = alloca(4*length);
+		colors = alloca(4*length);
 
-    vertex = alloca(8*length);
+		vertex = alloca(8*length);
 
-fill:;
+	fill:;
+		 {
+			GLint *texCoords = calloc(8, length);
+			int i = 0;
 
-    GLint *texCoords = calloc(8, length);
+			for(; i<length; ++i){
+				colors[i] = color;
+				vertex[(i*2)  ] = points[i][0];
+				vertex[(i*2)+1] = points[i][1];
+			}
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+			glTexCoordPointer(2, GL_INT, 0, texCoords);
+			glVertexPointer(2, GL_INT, 0, vertex);
 
-
-    for(int i = 0; i<length; ++i){
-        colors[i] = color;
-        vertex[(i*2)  ] = points[i][0];
-        vertex[(i*2)+1] = points[i][1];
-    }
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
-
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, length);
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, length);
 
 
 
 
-    free(texCoords);
+			free(texCoords);
+		}
+		if(length<MAX_STACK_STEAL)
+			return;
 
-    if(length<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
-    free(vertex);
-
+		free(colors);
+		free(vertex);
+	}
 }
 
-EXPORT(void DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
+EXPORT(void STDCALL DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
 
     if(NotVisible(x, y, w, h)){
         return;
     }
-
-    GLint vertex[] = {x, y, x+w, y, x+w, y+h, x, y+h};
+	
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
@@ -822,17 +900,18 @@ EXPORT(void DrawGradientRectangle(int x, int y, int w, int h, RGBA colors[4])){
     glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glVertexPointer(2, GL_INT, 0, vertex);
-
+	{
+		GLint vertex[] = {x, y, x+w, y, x+w, y+h, x, y+h};
+		glVertexPointer(2, GL_INT, 0, vertex);
+	}
 
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
+	
 
 }
 
-EXPORT(void DrawRectangle(int x, int y, int w, int h, RGBA color)){
+EXPORT(void STDCALL DrawRectangle(int x, int y, int w, int h, RGBA color)){
 
     GLuint colors[] = {color, color, color, color};
 
@@ -841,7 +920,7 @@ EXPORT(void DrawRectangle(int x, int y, int w, int h, RGBA color)){
 
 
 
-EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA color)){
+EXPORT(void STDCALL DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA color)){
 
     if(NotVisible(x, y, w, h))
         return;
@@ -849,28 +928,28 @@ EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA col
     if(!size)
         return;
 
-    GLint vertex[] = {
-        x, y,
-        x+size, y+size,
-        x, y+h,
-        x+size, y+h-size,
-        x+w, y+h,
-        x+w-size, y+h-size,
-        x+w, y,
-        x+w-size, y+size
-    };
-
-    GLuint colors[] = {color, color, color, color, color, color, color, color};
+	{
+		GLuint colors[] = {color, color, color, color, color, color, color, color};
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+	}
 
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-
     glBindBuffer(GL_ARRAY_BUFFER, SeriousCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glVertexPointer(2, GL_INT, 0, vertex);
-
+	{
+		GLint vertex[] = {
+			x, y,
+			x+size, y+size,
+			x, y+h,
+			x+size, y+h-size,
+			x+w, y+h,
+			x+w-size, y+h-size,
+			x+w, y,
+			x+w-size, y+size
+		};
+		glVertexPointer(2, GL_INT, 0, vertex);
+	}
 
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 8);
@@ -878,305 +957,305 @@ EXPORT(void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA col
 
 }
 
-EXPORT(void DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color)){
+EXPORT(void STDCALL DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color)){
 
-    const unsigned int step = M_PI*(float)((rx>ry)?rx:ry);
+    const unsigned int step = (unsigned)(M_PI*(float)((rx>ry)?rx:ry));
+	GLint * vertex = NULL;
+    if(step<5){
+        DrawPoint(x, y, color);
+        return;
+    }
+	
+    vertex = ApproximateEllipseGL(x, y, rx, ry, step);
+	{
+		RGBA  *colors = NULL;
+	
+		if(step<MAX_STACK_STEAL)
+			goto onstack;
+
+		colors = malloc(step<<2);
+
+		goto fill;
+
+	onstack:;
+
+		colors = alloca(step<<2);
+
+	fill:;
+		 {
+			GLint *texCoords = calloc(8, step);
+			unsigned int i = 0;
+
+			for(; i<step; i++){
+				colors[i] = color;
+			}
+
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+			glTexCoordPointer(2, GL_INT, 0, texCoords);
+			glVertexPointer(2, GL_INT, 0, vertex);
+
+			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+
+
+
+			glDrawArrays(GL_LINE_LOOP, 0, step);
+
+
+
+			FreeEllipsePointsGL(vertex);
+
+			free(texCoords);
+		}
+		if(step<MAX_STACK_STEAL)
+			return;
+
+		free(colors);
+	}
+}
+EXPORT(void STDCALL DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color)){
+
+    const unsigned int step = (unsigned)(M_PI*(float)((rx>ry)?rx:ry));
+
+	GLint *vertex = NULL;
 
     if(step<5){
         DrawPoint(x, y, color);
         return;
     }
 
-    GLint * vertex = ApproximateEllipseGL(x, y, rx, ry, step);
+    vertex = ApproximateEllipseGL(x, y, rx, ry, step);
 
-    if(step<MAX_STACK_STEAL)
-        goto onstack;
+	{
+		RGBA  *colors = NULL;
+	
+		if(step<MAX_STACK_STEAL)
+			goto onstack;
 
-    RGBA  *colors = NULL;
+		colors = malloc(step<<2);
 
-inheap:;
+		goto fill;
 
-    colors = malloc(step<<2);
+	onstack:;
 
-    goto fill;
+		colors = alloca(step<<2);
 
-onstack:;
+	fill:;
+		 {
+			GLint *texCoords = calloc(8, step);
+			unsigned int i = 0;
 
-    colors = alloca(step<<2);
+			for(; i<step; i++){
+				colors[i] = color;
+			}
 
-fill:;
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+			glTexCoordPointer(2, GL_INT, 0, texCoords);
+			glVertexPointer(2, GL_INT, 0, vertex);
 
-    GLint *texCoords = calloc(8, step);
+			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
+			glDrawArrays(GL_TRIANGLE_FAN, 0, step);
 
-    for(unsigned int i = 0; i<step; i++){
-        colors[i] = color;
-    }
+			FreeEllipsePointsGL(vertex);
 
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
+			free(texCoords);
+		 }
+		if(step<MAX_STACK_STEAL)
+			return;
 
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
-
-
-
-    glDrawArrays(GL_LINE_LOOP, 0, step);
-
-
-
-    FreeEllipsePointsGL(vertex);
-
-    free(texCoords);
-
-    if(step<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
-
-}
-EXPORT(void DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color)){
-
-    const unsigned int step = M_PI*(float)((rx>ry)?rx:ry);
-
-    if(step<5){
-        DrawPoint(x, y, color);
-        return;
-    }
-
-    GLint * vertex = ApproximateEllipseGL(x, y, rx, ry, step);
-
-    if(step<MAX_STACK_STEAL)
-        goto onstack;
-
-    RGBA  *colors = NULL;
-
-inheap:;
-
-    colors = malloc(step<<2);
-
-    goto fill;
-
-onstack:;
-
-    colors = alloca(step<<2);
-
-fill:;
-
-    GLint *texCoords = calloc(8, step);
-
-    for(unsigned int i = 0; i<step; i++){
-        colors[i] = color;
-    }
-
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
-
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
-
-
-
-    glDrawArrays(GL_TRIANGLE_FAN, 0, step);
-
-
-
-    FreeEllipsePointsGL(vertex);
-
-    free(texCoords);
-
-    if(step<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
+		free(colors);
+	}
 }
 
-EXPORT(void DrawOutlinedCircle(int x, int y, int r, RGBA color, int antialias)){
+EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int antialias)){
+	
+    const unsigned int step = (unsigned)(M_PI*((float)r));
+
+	GLint * vertex = NULL;
 
     if(r<3){
         DrawPoint(x, y, color);
         return;
     }
 
-    const unsigned int step = M_PI*((float)r);
+    vertex = ApproximateCircleGL(x, y, r, step);
+	{
+		RGBA  *colors = NULL;
+	
+		if(step<MAX_STACK_STEAL)
+			goto onstack;
 
-    GLint * vertex = ApproximateCircleGL(x, y, r, step);
+		colors = malloc(step<<2);
 
-    if(step<MAX_STACK_STEAL)
-        goto onstack;
+		goto fill;
 
-    RGBA  *colors = NULL;
+	onstack:;
 
-inheap:;
+		colors = alloca(step<<2);
 
-    colors = malloc(step<<2);
+	fill:;
+		 {
+		GLint *texCoords = calloc(8, step);
+		unsigned int i = 0;
 
-    goto fill;
+		for(; i<step; i++){
+			colors[i] = color;
+		}
 
-onstack:;
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+		glTexCoordPointer(2, GL_INT, 0, texCoords);
+		glVertexPointer(2, GL_INT, 0, vertex);
 
-    colors = alloca(step<<2);
-
-fill:;
-
-    GLint *texCoords = calloc(8, step);
-
-
-    for(unsigned int i = 0; i<step; i++){
-        colors[i] = color;
-    }
-
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
-
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+		glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
-    glDrawArrays(GL_LINE_LOOP, 0, step);
+		glDrawArrays(GL_LINE_LOOP, 0, step);
 
 
 
-    FreeEllipsePointsGL(vertex);
+		FreeEllipsePointsGL(vertex);
+	
+		free(texCoords);
+		}
+		if(step<MAX_STACK_STEAL)
+			return;
 
-    free(texCoords);
-
-    if(step<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
+		free(colors);
+	}
 }
-EXPORT(void DrawFilledCircle(int x, int y, int r, RGBA color, int antialias)){
+EXPORT(void STDCALL DrawFilledCircle(int x, int y, int r, RGBA color, int antialias)){
+	
+    const unsigned int step = (unsigned)(M_PI*((float)r));
+	GLint * vertex = NULL;
 
     if(r<3){
         DrawPoint(x, y, color);
         return;
     }
 
-    const unsigned int step = M_PI*((float)r);
+    vertex = ApproximateCircleGL(x, y, r, step);
+	{
+		RGBA  *colors = NULL;
+	
+		if(step<MAX_STACK_STEAL)
+			goto onstack;
 
-    GLint * vertex = ApproximateCircleGL(x, y, r, step);
+		colors = malloc(step<<2);
+		goto fill;
 
-    if(step<MAX_STACK_STEAL)
-        goto onstack;
+	onstack:;
 
-    RGBA  *colors = NULL;
+		colors = alloca(step<<2);
 
-inheap:;
+	fill:;
+		 {
+			GLint *texCoords = calloc(8, step);
+			unsigned int i = 0;
 
-    colors = malloc(step<<2);
-    goto fill;
+			for(; i<step; i++){
+				colors[i] = color;
+			}
 
-onstack:;
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+			glTexCoordPointer(2, GL_INT, 0, texCoords);
+			glVertexPointer(2, GL_INT, 0, vertex);
 
-    colors = alloca(step<<2);
-
-fill:;
-
-    GLint *texCoords = calloc(8, step);
-
-    for(unsigned int i = 0; i<step; i++){
-        colors[i] = color;
-    }
-
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
-
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
-    glDrawArrays(GL_TRIANGLE_FAN, 0, step);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, step);
 
 
 
-    FreeEllipsePointsGL(vertex);
+			FreeEllipsePointsGL(vertex);
 
-    free(texCoords);
+			free(texCoords);
+		 }
+		if(step<MAX_STACK_STEAL)
+			return;
 
-    if(step<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
+		free(colors);
+	}
 }
-EXPORT(void DrawGradientCircle(int x, int y, int r, RGBA color[2], int antialias)){
+EXPORT(void STDCALL DrawGradientCircle(int x, int y, int r, RGBA color[2], int antialias)){
+
+	GLint * vertex = NULL;
+    unsigned int step = (unsigned)(M_PI*((float)r));
 
     if(r<3){
         DrawPoint(x, y, *color);
         return;
     }
 
-    unsigned int step = M_PI*((float)r);
 
-    GLint * vertex = ApproximateCircleGL(x, y, r, step);
+    vertex = ApproximateCircleGL(x, y, r, step);
 
     step++;
 
     vertex[0] = x;
     vertex[1] = y;
+	{
+		RGBA  *colors = NULL;
 
-    if(step<MAX_STACK_STEAL)
-        goto onstack;
+		if(step<MAX_STACK_STEAL)
+			goto onstack;
 
-    RGBA  *colors = NULL;
+		colors = malloc(step<<2);
 
-inheap:;
+		goto fill;
 
-    colors = malloc(step<<2);
+	onstack:;
 
-    goto fill;
+		colors = alloca(step<<2);
 
-onstack:;
+	fill:;
+		{
+			GLint *texCoords = calloc(8, step);
+			unsigned int i = 1;
+			*colors = color[1];
 
-    colors = alloca(step<<2);
+			for(; i<step; i++){
+				colors[i] = *color;
+			}
 
-fill:;
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
+			glTexCoordPointer(2, GL_INT, 0, texCoords);
+			glVertexPointer(2, GL_INT, 0, vertex);
 
-    GLint *texCoords = calloc(8, step);
-
-    *colors = color[1];
-
-    for(unsigned int i = 1; i<step; i++){
-        colors[i] = *color;
-    }
-
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glTexCoordPointer(2, GL_INT, 0, texCoords);
-    glVertexPointer(2, GL_INT, 0, vertex);
-
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
-    glDrawArrays(GL_TRIANGLE_FAN, 0, step);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, step);
 
 
 
-    FreeEllipsePointsGL(vertex);
+			FreeEllipsePointsGL(vertex);
 
-    free(texCoords);
+			free(texCoords);
+		}
+		if(step<MAX_STACK_STEAL)
+			return;
 
-    if(step<MAX_STACK_STEAL)
-        return;
-
-    free(colors);
+		free(colors);
+	}
 }
 
 /////
 // Unimplemented:
 
-EXPORT(void DrawBezierCurve(int x[4], int y[4], double step, RGBA color, int cubic)){
+EXPORT(void STDCALL DrawBezierCurve(int x[4], int y[4], double step, RGBA color, int cubic)){
     return;
 }
 
-EXPORT(void DrawOutlinedComplex(int r_x, int r_y, int r_w, int r_h, int circ_x, int circ_y, int circ_r, RGBA color, int antialias)){
+EXPORT(void STDCALL DrawOutlinedComplex(int r_x, int r_y, int r_w, int r_h, int circ_x, int circ_y, int circ_r, RGBA color, int antialias)){
     return;
 }
-EXPORT(void DrawFilledComplex(int r_x, int r_y, int r_w, int r_h, int circ_x, int circ_y, int circ_r, float angle, float frac_size, int fill_empty, RGBA colors[2])){
+EXPORT(void STDCALL DrawFilledComplex(int r_x, int r_y, int r_w, int r_h, int circ_x, int circ_y, int circ_r, float angle, float frac_size, int fill_empty, RGBA colors[2])){
     return;
 }
-EXPORT(void DrawGradientComplex(int r_x, int r_y, int r_w, int r_h, int circ_x, int circ_y, int circ_r, float angle, float frac_size, int fill_empty, RGBA colors[3])){
+EXPORT(void STDCALL DrawGradientComplex(int r_x, int r_y, int r_w, int r_h, int circ_x, int circ_y, int circ_r, float angle, float frac_size, int fill_empty, RGBA colors[3])){
     return;
 }

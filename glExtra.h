@@ -1,11 +1,44 @@
 #ifndef FJGL_GLEXTRA_HEAD
 #define FJGL_GLEXTRA_HEAD
+
+#ifdef _WIN32
+#include <Windows.h>
+#include <Wingdi.h>
+
+#define GL_GLEXT_PROTOTYPES 1
+#define GL3_PROTOTYPES 1
+
+typedef size_t GLsizeiptr;
+typedef int * GLintptr;
+typedef char GLchar;
+
+#define GL_FUNC_REVERSE_SUBTRACT          0x800B
+#define GL_FUNC_ADD                       0x8006
+#define GL_FUNC_SUBTRACT                  0x800A
+
+#define GL_ARRAY_BUFFER                   0x8892
+#define GL_STATIC_DRAW                    0x88E4
+
+#define GL_FRAGMENT_SHADER                0x8B30
+#define GL_VERTEX_SHADER                  0x8B31
+#define GL_DELETE_STATUS                  0x8B80
+#define GL_COMPILE_STATUS                 0x8B81
+#define GL_LINK_STATUS                    0x8B82
+#define GL_VALIDATE_STATUS                0x8B83
+#define GL_INFO_LOG_LENGTH                0x8B84
+#define GL_ATTACHED_SHADERS               0x8B85
+#define GL_SHADER_TYPE                    0x8B4F
+#include <GL/gl.h>
+#endif
+
 #include <GL/gl.h>
 
 #ifndef GL_ZERO
 #define GL_ZERO	0
 #endif
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern void (APIENTRY * glGenBuffers)(GLsizei, GLuint*);
 extern void (APIENTRY * glDeleteBuffers)(GLsizei, GLuint*);
 extern void (APIENTRY * glBindBuffer)(GLenum,  GLuint);
@@ -29,7 +62,13 @@ extern void (APIENTRY * glDeleteProgram)(GLuint);
 extern GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name);
 extern void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0);
 extern void (APIENTRY * glBlendFuncSeparate)(GLenum, GLenum, GLenum, GLenum);
+#ifdef _WIN32
+extern void (APIENTRY * glBlendEquation)(GLenum);
+#endif
 
 void LoadGLFunctions(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

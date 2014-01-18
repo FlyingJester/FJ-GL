@@ -1,18 +1,20 @@
 
 #include <cstdint>
+#include "glExtra.h"
+#ifndef _WIN32
 #include <t5.h>
 #include <GL/gl.h>
+#else
+#include "t5.h"
+#define __func__ __FUNCTION__
+#endif
 #include <cassert>
 #include "configuration.h"
 #include "shader.h"
-#include "glExtra.h"
 #include <cstring>
 #include <string>
 
 using std::string;
-
-GLuint CurrentShader = 0;
-GLuint DefaultShader = 0;
 
 const char *EmbeddedFrag110 =
 "                                                                       \n\
@@ -71,6 +73,9 @@ void main(void){                                                        \n\
     gl_Position = (vec4(Vertex, 1.0, 1.0)/vec4(ScreenWidth/2.0, -ScreenHeight/2.0, 1.0, 1.0))-vec4(1.0, -1.0, 0.0, 0.0); \n\
 }                                                                       \n\
 ";
+
+const char *shaderDir;
+const char *systemShader;
 
 GLuint LoadEmbeddedShader(void){
 
