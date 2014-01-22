@@ -4,6 +4,7 @@
 #include "shader.h"
 #include "shader.h"
 #include <stdio.h>
+#include "config.h"
 
 #define MAX_STACK_STEAL 0x80
 #ifdef _WIN32
@@ -21,6 +22,8 @@
 #include <SDL/SDL_syswm.h>
 #endif
 
+static float SPI = M_PI;
+
 GLuint CurrentShader = 0;
 GLuint DefaultShader = 0;
 
@@ -33,6 +36,7 @@ int ClipRectX, ClipRectY, ClipRectW, ClipRectH;
 GLuint EmptyTexture = 0;
 
 GLuint TexCoordBuffer = 0;
+GLuint ZeroTexCoordBuffer = 0;
 GLuint FullColorBuffer = 0;
 GLuint SeriousCoordBuffer = 0;
 
@@ -151,6 +155,8 @@ void ResetOrtho(void){
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
+    scaleSize = configl.scale;
+
     if(scaleSize==0){
         //ideally just disable video altogether.
         scaleSize = 1;
@@ -219,6 +225,13 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
 #endif
     uint32_t white = 0xFFFFFFFF;
 
+    bool fullscreen = configl.fullscreen;
+
+    if(!configl.niceCircles){
+        printf("[FJ-GL] Using faster linear approximations.\n");
+        SPI = M_PI/2.0f;
+    }
+
     GLfloat texcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
 	GLfloat fullcolor[] = {
@@ -229,18 +242,19 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     };
 
     GLfloat stexcoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+    GLfloat ztexcoords[] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
     Width = w;
     Height = h;
 
-    Scale = 1;
+    Scale = configl.scale;
 
     ClipRectX = 0;
     ClipRectY = 0;
-    ClipRectW = w;
-    ClipRectH = h;
+    ClipRectW = w*Scale;
+    ClipRectH = h*Scale;
 
-    SetClippingRectangle(0, 0, w, h);
+    SetClippingRectangle(0, 0, w*Scale, h*Scale);
 
     ScreenCopy = realloc(ScreenCopy, 4*w*h);
 #ifdef __linux__
@@ -265,15 +279,14 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,8);
     SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,8);
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,8);
-    SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL,0);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-    //SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL,configl.vsync);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
 
     SDL_ShowCursor(SDL_DISABLE);
 
-    void * s = SDL_SetVideoMode(Width*Scale, Height*Scale, 32, SDL_OPENGL);
+    void * s = SDL_SetVideoMode(Width*Scale, Height*Scale, 32, SDL_OPENGL|((fullscreen)?SDL_FULLSCREEN:0));
 
     LoadGLFunctions();
 
@@ -302,13 +315,18 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     ScreenWidth = glGetUniformLocation(CurrentShader, "ScreenWidth");
     ScreenHeight = glGetUniformLocation(CurrentShader, "ScreenHeight");
     if(ScreenWidth>=0){
-        float ScreenWidthVal = (float)Width;
+        float ScreenWidthVal = (float)Width*(float)Scale;
         glProgramUniform1f(CurrentShader, ScreenWidth, ScreenWidthVal);
     }
-
+    else{
+        fprintf(stderr, "[FJ-GL] Error: Could not bind ScreenWidth to Shader.\n");
+    }
     if(ScreenHeight>=0){
-        float ScreenHeightVal = (float)Height;
+        float ScreenHeightVal = (float)Height*(float)Scale;
         glProgramUniform1f(CurrentShader, ScreenHeight, ScreenHeightVal);
+    }
+    else{
+        fprintf(stderr, "[FJ-GL] Error: Could not bind ScreenHeight to Shader.\n");
     }
 
 #ifdef __linux__
@@ -338,9 +356,10 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
     glGenTextures(1, &EmptyTexture);
     glBindTexture(GL_TEXTURE_2D, EmptyTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &white);
+    glGenerateMipmap(GL_TEXTURE_2D);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
@@ -366,7 +385,11 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
 
     glGenBuffers(1, &SeriousCoordBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, SeriousCoordBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLuint)*16, stexcoords, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLuint)<<4, stexcoords, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &ZeroTexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, ZeroTexCoordBuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLuint)<<3, ztexcoords, GL_STATIC_DRAW);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -402,7 +425,7 @@ EXPORT(bool STDCALL ToggleFullScreen(void)){
 }
 
 EXPORT(void STDCALL FlipScreen(void)){
-    glFlush();
+   // glFlush();
 #ifdef __linux__
     SDL_GL_SwapBuffers();
 #elif defined (_WIN32)
@@ -475,7 +498,7 @@ EXPORT(void STDCALL BlitImage(IMAGE * image, int x, int y, BlendMode blendmode))
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
     glColorPointer(4, GL_FLOAT, 0, NULL);
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, image->TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 	{
@@ -515,7 +538,7 @@ EXPORT(void STDCALL BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmo
 
 		glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
 	}
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, image->TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 	{
@@ -537,7 +560,7 @@ EXPORT(void STDCALL TransformBlitImage(IMAGE * image, int x[4], int y[4], BlendM
 
     glBindBuffer(GL_ARRAY_BUFFER, FullColorBuffer);
     glColorPointer(4, GL_FLOAT, 0, NULL);
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, image->TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 	{
@@ -562,7 +585,7 @@ EXPORT(void STDCALL TransformBlitImageMask(IMAGE * image, int x[4], int y[4], Bl
 
 		glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
 	}
-	glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, image->TexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 	{
@@ -614,7 +637,7 @@ EXPORT(void STDCALL DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
+        image.TexCoordBuffer = TexCoordBuffer;
 		image.pixels = NULL;
 		image.w = w;
 		image.h = h;
@@ -622,8 +645,8 @@ EXPORT(void STDCALL DirectBlit(int x, int y, int w, int h, RGBA* pixels)){
 		BlitImage(&image, x, y, 0);
 
 		glDeleteTextures(1, &(image.texture));
-
     }
+    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 }
 
 EXPORT(void STDCALL DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels)){
@@ -637,6 +660,7 @@ EXPORT(void STDCALL DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
+    image.TexCoordBuffer = TexCoordBuffer;
     image.pixels = NULL;
     image.w = w;
     image.h = h;
@@ -644,6 +668,7 @@ EXPORT(void STDCALL DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* 
     //IMAGE *image = CreateImage(w, h, pixels);
     TransformBlitImage(&image, x, y, 0);
     glDeleteTextures(1, &(image.texture));
+    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
     //DestroyImage(image);
 }
 
@@ -661,10 +686,10 @@ EXPORT(void STDCALL DirectGrab(int x, int y, int w, int h, RGBA* pixels)){
 
 EXPORT(void STDCALL DrawPoint(int x, int y, RGBA color)){
 
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+    //glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, &color);
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, ZeroTexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 	{
@@ -717,7 +742,7 @@ EXPORT(void STDCALL DrawPointSeries(int** points, int length, RGBA color)){
 			glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
 			glTexCoordPointer(2, GL_INT, 0, texCoords);
 			glVertexPointer(2, GL_INT, 0, vertex);
-			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 			glDrawArrays(GL_POINTS, 0, length);
 
@@ -742,10 +767,10 @@ EXPORT(void STDCALL DrawGradientLine(int x[2], int y[2], RGBA colors[2])){
 
     GLint vertex[] = {x[0], y[0], x[1], y[1]};
 
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+    //glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, ZeroTexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -804,7 +829,7 @@ EXPORT(void STDCALL DrawLineSeries(int** points, int length, RGBA color, int typ
 				glTexCoordPointer(2, GL_INT, 0, texCoords);
 				glVertexPointer(2, GL_INT, 0, vertex);
 
-				glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+				//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 				glDrawArrays(gltype, 0, length);
 
@@ -833,13 +858,13 @@ EXPORT(void STDCALL DrawGradientTriangle(int x[3], int y[3], RGBA colors[3])){
 
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
 
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, ZeroTexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glVertexPointer(2, GL_INT, 0, vertex);
 
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+    //glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
@@ -885,7 +910,7 @@ EXPORT(void STDCALL DrawPolygon(int** points, int length, int invert, RGBA color
 			glTexCoordPointer(2, GL_INT, 0, texCoords);
 			glVertexPointer(2, GL_INT, 0, vertex);
 
-			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
@@ -911,10 +936,10 @@ EXPORT(void STDCALL DrawGradientRectangle(int x, int y, int w, int h, RGBA color
     }
 
 
-    glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+    //glBindTexture(GL_TEXTURE_2D, EmptyTexture);
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
 
-    glBindBuffer(GL_ARRAY_BUFFER, TexCoordBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, ZeroTexCoordBuffer);
     glTexCoordPointer(2, GL_FLOAT, 0, NULL);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 	{
@@ -976,7 +1001,7 @@ EXPORT(void STDCALL DrawOutlinedRectangle(int x, int y, int w, int h, int size, 
 
 EXPORT(void STDCALL DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color)){
 
-    const unsigned int step = (unsigned)(M_PI*(float)((rx>ry)?rx:ry));
+    const unsigned int step = (unsigned)(SPI*(float)((rx>ry)?rx:ry));
 	GLint * vertex = NULL;
     if(step<5){
         DrawPoint(x, y, color);
@@ -1011,7 +1036,7 @@ EXPORT(void STDCALL DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color
 			glTexCoordPointer(2, GL_INT, 0, texCoords);
 			glVertexPointer(2, GL_INT, 0, vertex);
 
-			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
@@ -1031,7 +1056,7 @@ EXPORT(void STDCALL DrawOutlinedEllipse(int x, int y, int rx, int ry, RGBA color
 }
 EXPORT(void STDCALL DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color)){
 
-    const unsigned int step = (unsigned)(M_PI*(float)((rx>ry)?rx:ry));
+    const unsigned int step = (unsigned)(SPI*(float)((rx>ry)?rx:ry));
 
 	GLint *vertex = NULL;
 
@@ -1069,7 +1094,7 @@ EXPORT(void STDCALL DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color))
 			glTexCoordPointer(2, GL_INT, 0, texCoords);
 			glVertexPointer(2, GL_INT, 0, vertex);
 
-			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 			glDrawArrays(GL_TRIANGLE_FAN, 0, step);
 
@@ -1086,7 +1111,7 @@ EXPORT(void STDCALL DrawFilledEllipse(int x, int y, int rx, int ry, RGBA color))
 
 EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int antialias)){
 
-    const unsigned int step = (unsigned)(M_PI*((float)r));
+    const unsigned int step = (unsigned)(SPI*((float)r));
 
 	GLint * vertex = NULL;
 
@@ -1123,7 +1148,7 @@ EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int anti
 		glTexCoordPointer(2, GL_INT, 0, texCoords);
 		glVertexPointer(2, GL_INT, 0, vertex);
 
-		glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+		//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
@@ -1143,7 +1168,7 @@ EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int anti
 }
 EXPORT(void STDCALL DrawFilledCircle(int x, int y, int r, RGBA color, int antialias)){
 
-    const unsigned int step = (unsigned)(M_PI*((float)r));
+    const unsigned int step = (unsigned)(SPI*((float)r));
 	GLint * vertex = NULL;
 
     if(r<3){
@@ -1178,7 +1203,7 @@ EXPORT(void STDCALL DrawFilledCircle(int x, int y, int r, RGBA color, int antial
 			glTexCoordPointer(2, GL_INT, 0, texCoords);
 			glVertexPointer(2, GL_INT, 0, vertex);
 
-			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 
@@ -1199,7 +1224,7 @@ EXPORT(void STDCALL DrawFilledCircle(int x, int y, int r, RGBA color, int antial
 EXPORT(void STDCALL DrawGradientCircle(int x, int y, int r, RGBA color[2], int antialias)){
 
 	GLint * vertex = NULL;
-    unsigned int step = (unsigned)(M_PI*((float)r));
+    unsigned int step = (unsigned)(SPI*((float)r));
 
     if(r<3){
         DrawPoint(x, y, *color);
@@ -1241,7 +1266,7 @@ EXPORT(void STDCALL DrawGradientCircle(int x, int y, int r, RGBA color[2], int a
 			glTexCoordPointer(2, GL_INT, 0, texCoords);
 			glVertexPointer(2, GL_INT, 0, vertex);
 
-			glBindTexture(GL_TEXTURE_2D, EmptyTexture);
+			//glBindTexture(GL_TEXTURE_2D, EmptyTexture);
 
 
 

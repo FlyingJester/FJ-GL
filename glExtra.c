@@ -54,6 +54,7 @@ void (APIENTRY * glDeleteProgram)(GLuint) = NULL;
 GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name) = NULL;
 void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0) = NULL;
 void (APIENTRY * glBlendFuncSeparate)(GLenum, GLenum, GLenum, GLenum) = NULL;
+void (APIENTRY * glGenerateMipmap)(GLenum) = NULL;
 #ifdef _WIN32
 void (APIENTRY * glBlendEquation)(GLenum) = NULL;
 #endif
@@ -121,6 +122,7 @@ void LoadGLFunctions(void){
     GET_GL_FUNCTION(glGetUniformLocation,      (GLint (APIENTRY *)(GLuint, const GLchar *)));
     GET_GL_FUNCTION(glProgramUniform1f,         (void (APIENTRY *)(GLuint program, GLint location, GLfloat v0)));
     GET_GL_FUNCTION(glBlendFuncSeparate,        (void (APIENTRY *)(GLenum, GLenum, GLenum, GLenum)));
+    GET_GL_FUNCTION(glGenerateMipmap,           (void (APIENTRY *)(GLenum)));
 #ifdef __linux__
     if(SDL_GL_GetProcAddress("glCopyImageSubData")!=NULL){
         glCopyImageSubData = (void(APIENTRY *)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) SDL_GL_GetProcAddress("glCopyImageSubData");

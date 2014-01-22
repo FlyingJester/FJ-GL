@@ -28,13 +28,13 @@
 	#ifndef _WIN32
 	#include <stdbool.h>
 	#else
-    
+
 	#define EXPORT(x) __declspec( dllexport ) x
 
 	typedef char bool;
 	#define true 1;
 	#define false 0;
-	
+
 	#define inline __inline
 
 	#endif
@@ -102,7 +102,7 @@ typedef struct {
     GLuint texture;
     unsigned int w;
     unsigned int h;
-	
+	GLuint TexCoordBuffer;
 #ifdef __cplusplus
 };
 #else
@@ -129,7 +129,7 @@ EXPORT(void STDCALL GetClippingRectangle(int* x, int* y, int* w, int* h));
 
 EXPORT(IMAGE * STDCALL CreateImage(int width, int height, RGBA* pixels));
 EXPORT(IMAGE * STDCALL CloneImage(IMAGE * image));
-EXPORT(IMAGE * STDCALL GrabImage(IMAGE * image, int x, int y, int width, int height));
+EXPORT(IMAGE * STDCALL GrabImage(int x, int y, int width, int height));
 EXPORT(void STDCALL DestroyImage(IMAGE * image));
 EXPORT(void STDCALL BlitImage(IMAGE * image, int x, int y, BlendMode blendmode));
 EXPORT(void STDCALL BlitImageMask(IMAGE * image, int x, int y, BlendMode blendmode, RGBA mask, BlendMode mask_blendmode));

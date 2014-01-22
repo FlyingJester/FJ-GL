@@ -14,6 +14,7 @@ static float PI2 = M_PI*2;
 # define M_PI		3.14159265358979323846f	/* pi */
 static float PI2 = 6.28318530717958647692f;
 #endif
+static float PIB2 = M_PI/2.0f;
 
 
 /////

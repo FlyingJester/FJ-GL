@@ -18,7 +18,7 @@ using std::string;
 
 const char *EmbeddedFrag110 =
 "                                                                       \n\
-#version 110                                                            \n\
+#version 130                                                            \n\
                                                                         \n\
 uniform sampler2D textureSampler;                                       \n\
                                                                         \n\
@@ -30,15 +30,16 @@ void main(void){                                                        \n\
 
 const char *EmbeddedVert110 =
 "\
-#version 110                                                            \n\
+#version 130                                                            \n\
                                                                         \n\
 uniform float ScreenWidth;                                              \n\
 uniform float ScreenHeight;                                             \n\
                                                                         \n\
 void main(void){                                                        \n\
-    gl_TexCoord[0] = gl_MultiTexCoord0;                                 \n\
-    gl_FrontColor = gl_Color;                                           \n\
-    gl_Position = (Vertex/vec4(ScreenWidth/2.0, -ScreenHeight/2.0, 1.0, 1.0))-vec4(1.0, -1.0, 0.0, 0.0); \n\
+                                                                        \n\
+    gl_TexCoord[0]  = gl_MultiTexCoord0;                                 \n\
+    gl_FrontColor   = gl_Color;                                           \n\
+	gl_Position     = gl_ModelViewProjectionMatrix*gl_Vertex;             \n\
 }                                                                       \n\
 ";
 
@@ -73,13 +74,49 @@ void main(void){                                                        \n\
 }                                                                       \n\
 ";
 
+const char *EmbeddedFragHq2x =
+"                                                                       \n\
+#version 130                                                            \n\
+                                                                        \n\
+uniform float ScreenWidth;                                              \n\
+uniform float ScreenHeight;                                             \n\
+                                                                        \n\
+uniform sampler2D textureSampler;                                       \n\
+                                                                        \n\
+void main(void){                                                        \n\
+                                                                        \n\
+    vec4 texcolor = texture2D(textureSampler, gl_TexCoord[0].st);       \n\
+    vec4 color = texcolor*gl_Color;                                     \n\
+    vec4 rcolor = color;                                                \n\
+    color.r = (rcolor.r+rcolor.g+rcolor.b)/6.75;                         \n\
+    color.b = (rcolor.r+rcolor.g+rcolor.b)/12.5;                         \n\
+    color.g = (rcolor.r+rcolor.g+rcolor.g+rcolor.b)/5.0;                         \n\
+                                                                        \n\
+    float nx = gl_FragCoord.x;                                          \n\
+                                                                        \n\
+    while(nx>ScreenWidth/64){                                                                 \n\
+      nx-=0.001;                                                                  \n\
+    }                                                                    \n\
+                                                                        \n\
+    if(nx<0.001){                                                       \n\
+      color/=8.0;                                                                  \n\
+    }                                                                    \n\
+    gl_FragColor = color;                                               \n\
+}                                                                       \n\
+";
+
+
 const char *shaderDir;
 const char *systemShader;
 
 GLuint LoadEmbeddedShader(void){
+    const char *glslver = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
+    if(!glslver)
+        glslver = "No version string found for GLSL. Assuming 1.10 compliance.";
+    printf("%s\n", glslver);
 
     //Build the program
-    GLuint frag = TS_CreateShader(EmbeddedFrag110, GL_FRAGMENT_SHADER);
+    GLuint frag = TS_CreateShader(EmbeddedFragHq2x, GL_FRAGMENT_SHADER);
     GLuint vert = TS_CreateShader(EmbeddedVert110, GL_VERTEX_SHADER);
 
     GLuint prog = TS_CreateProgram(frag, vert);
