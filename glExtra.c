@@ -1,4 +1,6 @@
+#include "api.h"
 #include "glExtra.h"
+#include "config.h"
 #define GL_GLEXT_PROTOTYPES 1
 
 #ifdef __linux__
@@ -55,6 +57,14 @@ GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name) = NUL
 void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0) = NULL;
 void (APIENTRY * glBlendFuncSeparate)(GLenum, GLenum, GLenum, GLenum) = NULL;
 void (APIENTRY * glGenerateMipmap)(GLenum) = NULL;
+
+void (APIENTRY * glGenVertexArrays)(GLsizei, GLuint*) = NULL;
+void (APIENTRY * glDeleteVertexArrays)(GLsizei, GLuint*) = NULL;
+void (APIENTRY * glBindVertexArray)(GLuint) = NULL;
+GLint (APIENTRY * glGetAttribLocation)(GLuint, const GLchar *) = NULL;
+GLint (APIENTRY * glVertexAttribPointer)(GLuint name, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *data) = NULL;
+
+
 #ifdef _WIN32
 void (APIENTRY * glBlendEquation)(GLenum) = NULL;
 #endif
@@ -70,11 +80,22 @@ void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
         exit(1);\
     }\
 }
+#define CHECK_FOR_PROCESS_NON_FATAL(NAME){\
+        if(SDL_GL_GetProcAddress(NAME)==NULL){\
+        fprintf(stderr, "[FJ-GL] Init Error: " NAME " is not present in OpenGL library.\n");\
+    }\
+}
 #else
 #define CHECK_FOR_PROCESS(NAME){\
         if(wglGetProcAddress(NAME)==NULL){\
         fprintf(stderr, "[FJ-GL] Init Error: " NAME " is not present in OpenGL library.\n");\
         exit(1);\
+    }\
+}
+
+#define CHECK_FOR_PROCESS_NON_FATAL(NAME){\
+        if(wglGetProcAddress(NAME)==NULL){\
+        fprintf(stderr, "[FJ-GL] Init Error: " NAME " is not present in OpenGL library.\n");\
     }\
 }
 
@@ -85,9 +106,15 @@ void APIENTRY TS_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
 #define GET_GL_FUNCTION(NAME, TYPING)\
 CHECK_FOR_PROCESS( #NAME );\
 NAME = TYPING SDL_GL_GetProcAddress( #NAME )
+#define GET_GL_FUNCTION_NON_FATAL(NAME, TYPING)\
+CHECK_FOR_PROCESS_NON_FATAL( #NAME );\
+NAME = TYPING SDL_GL_GetProcAddress( #NAME )
 #else
 #define GET_GL_FUNCTION(NAME, TYPING)\
 CHECK_FOR_PROCESS( #NAME );\
+NAME = TYPING wglGetProcAddress( #NAME )
+#define GET_GL_FUNCTION_NON_FATAL(NAME, TYPING)\
+CHECK_FOR_PROCESS_NON_FATAL( #NAME );\
 NAME = TYPING wglGetProcAddress( #NAME )
 
 #endif
@@ -123,6 +150,19 @@ void LoadGLFunctions(void){
     GET_GL_FUNCTION(glProgramUniform1f,         (void (APIENTRY *)(GLuint program, GLint location, GLfloat v0)));
     GET_GL_FUNCTION(glBlendFuncSeparate,        (void (APIENTRY *)(GLenum, GLenum, GLenum, GLenum)));
     GET_GL_FUNCTION(glGenerateMipmap,           (void (APIENTRY *)(GLenum)));
+
+    GET_GL_FUNCTION_NON_FATAL(glGenVertexArrays,          (void (APIENTRY *)(GLsizei, GLuint*)));
+    GET_GL_FUNCTION_NON_FATAL(glDeleteVertexArrays,       (void (APIENTRY *)(GLsizei, GLuint*)));
+    GET_GL_FUNCTION_NON_FATAL(glBindVertexArray,          (void (APIENTRY *)(GLuint)));
+    GET_GL_FUNCTION_NON_FATAL(glGetAttribLocation,       (GLint (APIENTRY *)(GLuint, GLchar*)));
+    GET_GL_FUNCTION_NON_FATAL(glVertexAttribPointer,     (GLint (APIENTRY *)(GLuint, GLint, GLenum, GLboolean, GLsizei, const GLvoid*)));
+
+
+    if(!(glGenVertexArrays&&glDeleteVertexArrays&&glBindVertexArray&&glGetAttribLocation))
+        configl.hasVertexArrays = 0;
+    else
+        configl.hasVertexArrays = 1;
+
 #ifdef __linux__
     if(SDL_GL_GetProcAddress("glCopyImageSubData")!=NULL){
         glCopyImageSubData = (void(APIENTRY *)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) SDL_GL_GetProcAddress("glCopyImageSubData");

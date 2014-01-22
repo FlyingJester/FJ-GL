@@ -103,6 +103,9 @@ typedef struct {
     unsigned int w;
     unsigned int h;
 	GLuint TexCoordBuffer;
+	GLuint ColorBuffer;
+	GLuint VertexBuffer;
+	GLuint VertexArray; //Only valid when configl.hasVertexArrays is not zero.
 #ifdef __cplusplus
 };
 #else
@@ -164,5 +167,8 @@ EXPORT(void STDCALL DrawOutlinedCircle(int x, int y, int r, RGBA color, int anti
 EXPORT(void STDCALL DrawFilledCircle(int x, int y, int r, RGBA color, int antialias));
 EXPORT(void STDCALL DrawGradientCircle(int x, int y, int r, RGBA colors[2], int antialias));
 
+EXPORT(unsigned int GetVertexAttrib(void));
+EXPORT(unsigned int GetColorAttrib(void));
+EXPORT(unsigned int GetTexCoordAttrib(void));
 
 #endif

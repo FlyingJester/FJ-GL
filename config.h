@@ -12,6 +12,8 @@ typedef struct {
     int niceCircles;
     int niceImages;
 
+    int hasVertexArrays;
+
 } drvc;
 
 extern drvc configl;

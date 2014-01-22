@@ -116,7 +116,7 @@ GLuint LoadEmbeddedShader(void){
     printf("%s\n", glslver);
 
     //Build the program
-    GLuint frag = TS_CreateShader(EmbeddedFragHq2x, GL_FRAGMENT_SHADER);
+    GLuint frag = TS_CreateShader(EmbeddedFrag110, GL_FRAGMENT_SHADER);
     GLuint vert = TS_CreateShader(EmbeddedVert110, GL_VERTEX_SHADER);
 
     GLuint prog = TS_CreateProgram(frag, vert);

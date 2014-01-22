@@ -63,6 +63,13 @@ extern GLint(APIENTRY * glGetUniformLocation)(GLuint program, const GLchar *name
 extern void (APIENTRY * glProgramUniform1f)(GLuint program, GLint location, GLfloat v0);
 extern void (APIENTRY * glBlendFuncSeparate)(GLenum, GLenum, GLenum, GLenum);
 extern void (APIENTRY * glGenerateMipmap)(GLenum);
+
+extern void (APIENTRY * glGenVertexArrays)(GLsizei, GLuint*);
+extern void (APIENTRY * glDeleteVertexArrays)(GLsizei, GLuint*);
+extern void (APIENTRY * glBindVertexArray)(GLuint);
+extern GLint (APIENTRY * glGetAttribLocation)(GLuint, const GLchar *);
+extern GLint (APIENTRY * glVertexAttribPointer)(GLuint name, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *data);
+
 #ifdef _WIN32
 extern void (APIENTRY * glBlendEquation)(GLenum);
 #endif

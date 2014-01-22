@@ -40,6 +40,10 @@ GLuint ZeroTexCoordBuffer = 0;
 GLuint FullColorBuffer = 0;
 GLuint SeriousCoordBuffer = 0;
 
+GLuint VertexAttrib = 0;
+GLuint ColorAttrib = 0;
+GLuint TexCoordAttrib = 0;
+
 #ifdef __linux__
 Display *display;
 Window window;
@@ -48,6 +52,17 @@ GLXContext glcontext;
 HDC dc;
 HGLRC glcontext;
 #endif
+
+
+EXPORT(unsigned int GetVertexAttrib(void)){
+    return VertexAttrib;
+}
+EXPORT(unsigned int GetColorAttrib(void)){
+    return ColorAttrib;
+}
+EXPORT(unsigned int GetTexCoordAttrib(void)){
+    return TexCoordAttrib;
+}
 
 inline bool NotVisible(int x, int y, int w, int h){
 
@@ -347,6 +362,28 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
 #ifdef __linux__
 	SDL_ShowCursor(0);
 #endif
+
+    if(configl.hasVertexArrays){
+        VertexAttrib    = glGetAttribLocation(CurrentShader, "Vertex");
+        ColorAttrib     = glGetAttribLocation(CurrentShader, "Color");
+        TexCoordAttrib  = glGetAttribLocation(CurrentShader, "TexCoord");
+        printf("[FJ-GL] Using Vertex Arrays.\n");
+    }
+
+    if(configl.niceImages){
+        printf("[FJ-GL] Using nicest video settings.\n");
+        glHint(GL_FRAGMENT_SHADER_DERIVATIVE_HINT, GL_NICEST);
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+        glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+        glHint(GL_TEXTURE_COMPRESSION_HINT, GL_NICEST); //Unused in FJ-GL, but included for completeness because it does no harm.
+    }
+    else {
+        printf("[FJ-GL] Using fastest video settings.\n");
+        glHint(GL_FRAGMENT_SHADER_DERIVATIVE_HINT, GL_FASTEST);
+        glHint(GL_LINE_SMOOTH_HINT, GL_FASTEST);
+        glHint(GL_POLYGON_SMOOTH_HINT, GL_FASTEST);
+        glHint(GL_TEXTURE_COMPRESSION_HINT, GL_FASTEST); //Unused in FJ-GL, but included for completeness because it does no harm.
+    }
 
     glDepthMask(GL_FALSE);
     glDisable(GL_DITHER);

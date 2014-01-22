@@ -4,6 +4,13 @@
 #include "config.h"
 
     GLfloat tex[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+    GLfloat fliptex[] = {0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+    GLfloat whitef[] = {
+    1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f,
+    };
 EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
 
     int newWidth = width+1;
@@ -76,6 +83,23 @@ EXPORT(IMAGE * CreateImage(int width, int height, RGBA* pixels)){
     glGenBuffers(1, &(im->TexCoordBuffer));
     glBindBuffer(GL_ARRAY_BUFFER, im->TexCoordBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<3, newtex, GL_STATIC_DRAW);
+    if(configl.hasVertexArrays){
+        glGenVertexArrays(1, &(im->VertexArray));
+        glGenBuffers(1, &(im->VertexBuffer));
+        glGenBuffers(1, &(im->ColorBuffer));
+        glBindVertexArray(im->VertexArray);
+        glVertexAttribPointer(GetTexCoordAttrib(), 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindBuffer(GL_ARRAY_BUFFER, im->ColorBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<4, whitef, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(GetColorAttrib(), 4, GL_FLOAT, GL_FALSE, 0, NULL);
+        glBindBuffer(GL_ARRAY_BUFFER, im->VertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<3, tex, GL_STREAM_DRAW); //Dummy value.
+        glVertexAttribPointer(GetVertexAttrib(), 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindVertexArray(0);
+    }
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 
@@ -129,6 +153,24 @@ EXPORT(IMAGE * STDCALL CloneImage(IMAGE * image)){
     glGenBuffers(1, &(im->TexCoordBuffer));
     glBindBuffer(GL_ARRAY_BUFFER, im->TexCoordBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<3, tex, GL_STATIC_DRAW);
+
+    if(configl.hasVertexArrays){
+        glGenVertexArrays(1, &(im->VertexArray));
+        glGenBuffers(1, &(im->VertexBuffer));
+        glGenBuffers(1, &(im->ColorBuffer));
+        glBindVertexArray(im->VertexArray);
+        glVertexAttribPointer(GetTexCoordAttrib(), 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindBuffer(GL_ARRAY_BUFFER, im->ColorBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<4, whitef, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(GetColorAttrib(), 4, GL_FLOAT, GL_FALSE, 0, NULL);
+        glBindBuffer(GL_ARRAY_BUFFER, im->VertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<3, tex, GL_STREAM_DRAW); //Dummy value.
+        glVertexAttribPointer(GetVertexAttrib(), 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindVertexArray(0);
+    }
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glGenTextures(1, &texture);
@@ -163,7 +205,25 @@ EXPORT(IMAGE * STDCALL GrabImage(int x, int y, int width, int height)){
     IMAGE *im = malloc(sizeof(IMAGE));
     glGenBuffers(1, &(im->TexCoordBuffer));
     glBindBuffer(GL_ARRAY_BUFFER, im->TexCoordBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<3, tex, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<3, fliptex, GL_STATIC_DRAW);
+
+    if(configl.hasVertexArrays){
+        glGenVertexArrays(1, &(im->VertexArray));
+        glGenBuffers(1, &(im->VertexBuffer));
+        glGenBuffers(1, &(im->ColorBuffer));
+        glBindVertexArray(im->VertexArray);
+        glVertexAttribPointer(GetTexCoordAttrib(), 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindBuffer(GL_ARRAY_BUFFER, im->ColorBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<4, whitef, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(GetColorAttrib(), 4, GL_FLOAT, GL_FALSE, 0, NULL);
+        glBindBuffer(GL_ARRAY_BUFFER, im->VertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)<<3, fliptex, GL_STREAM_DRAW); //Dummy value.
+        glVertexAttribPointer(GetVertexAttrib(), 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindVertexArray(0);
+    }
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, ScreenCopy);

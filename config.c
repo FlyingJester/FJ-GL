@@ -47,6 +47,9 @@ bool WriteDefaultConfig(const char *path){
 }
 
 bool ReadConfig(FILE *file){
+
+    configl.hasVertexArrays = 0;
+
     rewind(file);
     char signature[5];
     signature[4] = '\0';
