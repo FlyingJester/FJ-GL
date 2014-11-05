@@ -36,6 +36,11 @@ typedef char GLchar;
 #ifndef GL_ZERO
 #define GL_ZERO	0
 #endif
+
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -79,4 +84,9 @@ void LoadGLFunctions(void);
 #ifdef __cplusplus
 }
 #endif
+
+#else
+
+#define LoadGLFunctions(...)
+
 #endif

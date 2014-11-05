@@ -1,7 +1,8 @@
 #ifndef FJGL_DRVCONF_HEAD
 #define FJGL_DRVCONF_HEAD
 #include <stdbool.h>
-;
+#include <stdio.h>
+
 typedef struct {
 
     int fullscreen;

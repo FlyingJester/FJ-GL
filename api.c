@@ -15,11 +15,17 @@
 #define GL_GLEXT_PROTOTYPES 1
 #define GL3_PROTOTYPES 1
 #endif
-#include <GL/gl.h>
+
 #ifdef __linux__
 #include <X11/Xlib.h>
 #include <GL/glx.h>
+#endif
+
+#ifndef _WIN32
+#include <GL/gl.h>
+#include <SDL/SDL.h>
 #include <SDL/SDL_syswm.h>
+#include <SDL/SDL_opengl.h>
 #endif
 
 static float SPI = M_PI;
@@ -206,9 +212,9 @@ EXPORT(void STDCALL ConfigureDriver(HWND parent)){
 }
 #endif
 
-#ifdef __linux__
+#ifndef _WIN32
 bool InternalInitVideo(int w, int h){
-#elif defined (_WIN32)
+#else
 EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
 
 #endif
@@ -272,7 +278,7 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     SetClippingRectangle(0, 0, w*Scale, h*Scale);
 
     ScreenCopy = realloc(ScreenCopy, 4*w*h);
-#ifdef __linux__
+#ifndef _WIN32
     if(SDL_WasInit(SDL_INIT_EVERYTHING)==0){
         fprintf(stderr, "[FJ-GL] Warning: SDL2 was not initialized.\n\tError: %s\n", SDL_GetError());
         SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK);
@@ -344,7 +350,7 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
         fprintf(stderr, "[FJ-GL] Error: Could not bind ScreenHeight to Shader.\n");
     }
 
-#ifdef __linux__
+#ifndef _WIN32
 
     if(s==NULL){
         fprintf(stderr, "[FJ-GL] Error: Could not open window.\n\tError: %s\n", SDL_GetError());
@@ -359,7 +365,7 @@ EXPORT(bool STDCALL InitVideoDriver(HWND window, int w, int h)){
     glBlendEquation(GL_FUNC_ADD);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-#ifdef __linux__
+#ifndef _WIN32
 	SDL_ShowCursor(0);
 #endif
 
@@ -451,7 +457,7 @@ EXPORT(void STDCALL CloseVideoDriver(void)){
     //SDL_DestroyWindow(screen);
 
 //	SDL_VideoQuit();
-#ifdef __linux__
+#ifndef _WIN32
     SDL_Quit();
 #endif
     free(ScreenCopy);
@@ -463,7 +469,7 @@ EXPORT(bool STDCALL ToggleFullScreen(void)){
 
 EXPORT(void STDCALL FlipScreen(void)){
    // glFlush();
-#ifdef __linux__
+#ifndef _WIN32
     SDL_GL_SwapBuffers();
 #elif defined (_WIN32)
 	SwapBuffers(dc);

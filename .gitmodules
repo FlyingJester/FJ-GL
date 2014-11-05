@@ -1,0 +1,3 @@
+[submodule "libt5"]
+	path = libt5
+	url = https://github.com/FlyingJester/libt5

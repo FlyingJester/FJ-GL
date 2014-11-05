@@ -2,6 +2,7 @@
 #include <GL/gl.h>
 #include "glExtra.h"
 #include "config.h"
+#include "glCopyImageSubData.h"
 
     GLfloat tex[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
     GLfloat fliptex[] = {0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};

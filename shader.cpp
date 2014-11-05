@@ -37,9 +37,9 @@ uniform float ScreenHeight;                                             \n\
                                                                         \n\
 void main(void){                                                        \n\
                                                                         \n\
-    gl_TexCoord[0]  = gl_MultiTexCoord0;                                 \n\
-    gl_FrontColor   = gl_Color;                                           \n\
-	gl_Position     = gl_ModelViewProjectionMatrix*gl_Vertex;             \n\
+    gl_TexCoord[0]  = gl_MultiTexCoord0;                                \n\
+    gl_FrontColor   = gl_Color;                                         \n\
+	gl_Position     = gl_ModelViewProjectionMatrix*gl_Vertex;           \n\
 }                                                                       \n\
 ";
 
@@ -88,19 +88,19 @@ void main(void){                                                        \n\
     vec4 texcolor = texture2D(textureSampler, gl_TexCoord[0].st);       \n\
     vec4 color = texcolor*gl_Color;                                     \n\
     vec4 rcolor = color;                                                \n\
-    color.r = (rcolor.r+rcolor.g+rcolor.b)/6.75;                         \n\
-    color.b = (rcolor.r+rcolor.g+rcolor.b)/12.5;                         \n\
-    color.g = (rcolor.r+rcolor.g+rcolor.g+rcolor.b)/5.0;                         \n\
+    color.r = (rcolor.r+rcolor.g+rcolor.b)/6.75;                        \n\
+    color.b = (rcolor.r+rcolor.g+rcolor.b)/12.5;                        \n\
+    color.g = (rcolor.r+rcolor.g+rcolor.g+rcolor.b)/5.0;                \n\
                                                                         \n\
     float nx = gl_FragCoord.x;                                          \n\
                                                                         \n\
-    while(nx>ScreenWidth/64){                                                                 \n\
-      nx-=0.001;                                                                  \n\
-    }                                                                    \n\
+    while(nx>ScreenWidth/64){                                           \n\
+      nx-=0.001;                                                        \n\
+    }                                                                   \n\
                                                                         \n\
     if(nx<0.001){                                                       \n\
-      color/=8.0;                                                                  \n\
-    }                                                                    \n\
+      color/=8.0;                                                       \n\
+    }                                                                   \n\
     gl_FragColor = color;                                               \n\
 }                                                                       \n\
 ";
@@ -110,11 +110,15 @@ const char *shaderDir;
 const char *systemShader;
 
 GLuint LoadEmbeddedShader(void){
+    #ifdef __APPLE__
+    const char *glslver = NULL;
+    #else
     const char *glslver = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
+    #endif // __APPLE__
+
     if(!glslver)
         glslver = "No version string found for GLSL. Assuming 1.10 compliance.";
     printf("%s\n", glslver);
-
     //Build the program
     GLuint frag = TS_CreateShader(EmbeddedFrag110, GL_FRAGMENT_SHADER);
     GLuint vert = TS_CreateShader(EmbeddedVert110, GL_VERTEX_SHADER);
@@ -152,16 +156,26 @@ GLuint TS_LoadSystemShader(const char *file){
     assert(T5_IsFile(fullfile));
 
     //Load the specified shader manifest
-    T5_file* shaderfile = T5_OpenFile(fullfile);
+    t5::DataSource *source = t5::DataSource::FromPath(t5::DataSource::eRead, fullfile);
+    t5::map::Group group(nullptr);
+    group.ReadDataSource(source);
 
-    assert(shaderfile!=NULL);
-
-    const char *fragmentname = shaderfile->getValue("fragment");
-    const char *vertexname = shaderfile->getValue("vertex");
+    const char *fragmentname = group.GetString("fragment");
+    const char *vertexname = group.GetString("vertex");
 
     //Load the filetext of the shaders
-    T5_FileText fragment_text   = T5_LoadFileAsText(string(shaderDir).append(fragmentname).c_str());
-    T5_FileText vertex_text     = T5_LoadFileAsText(string(shaderDir).append(vertexname).c_str());
+    t5::DataSource *fragment_source = t5::DataSource::FromPath(t5::DataSource::eRead, string(shaderDir).append(fragmentname).c_str());
+    t5::DataSource *vertex_source = t5::DataSource::FromPath(t5::DataSource::eRead, string(shaderDir).append(vertexname).c_str());
+
+    char *fragment_text = (char *)malloc(fragment_source->Length()+1);
+    fragment_text[fragment_source->Length()] = '\0';
+
+    char *vertex_text = (char *)malloc(vertex_source->Length()+1);
+    vertex_text[vertex_source->Length()] = '\0';
+
+    fragment_source->Read(fragment_text, fragment_source->Length());
+    vertex_source->Read(vertex_text, vertex_source->Length());
+
 
     printf("[FJ-GL] Frag Shader:\n%s\n\nVertex Shader:\n%s\n", fragment_text, vertex_text);
 
@@ -173,6 +187,9 @@ GLuint TS_LoadSystemShader(const char *file){
 
     if(prog==0)
         fprintf(stderr, "[FJ-GL] %s Error: Could not create program from %s.\n", __func__, file);
+
+    free(fragment_text);
+    free(vertex_text);
 
     return prog;
 }
@@ -201,16 +218,26 @@ GLuint TS_LoadShader(const char *file){
     assert(T5_IsFile(fullfile));
 
     //Load the specified shader manifest
-    T5_file* shaderfile = T5_OpenFile(fullfile);
+    t5::DataSource *source = t5::DataSource::FromPath(t5::DataSource::eRead, fullfile);
+    t5::map::Group group(nullptr);
+    group.ReadDataSource(source);
 
-    assert(shaderfile!=NULL);
-
-    const char *fragmentname = shaderfile->getValue("fragment");
-    const char *vertexname = shaderfile->getValue("vertex");
+    const char *fragmentname = group.GetString("fragment");
+    const char *vertexname = group.GetString("vertex");
 
     //Load the filetext of the shaders
-    T5_FileText fragment_text   = T5_LoadFileAsText(string(systemShader).append(fragmentname).c_str());
-    T5_FileText vertex_text     = T5_LoadFileAsText(string(systemShader).append(vertexname).c_str());
+
+    t5::DataSource *fragment_source = t5::DataSource::FromPath(t5::DataSource::eRead, string(systemShader).append(fragmentname).c_str());
+    t5::DataSource *vertex_source = t5::DataSource::FromPath(t5::DataSource::eRead, string(systemShader).append(vertexname).c_str());
+
+    char *fragment_text = (char *)malloc(fragment_source->Length()+1);
+    fragment_text[fragment_source->Length()] = '\0';
+
+    char *vertex_text = (char *)malloc(vertex_source->Length()+1);
+    vertex_text[vertex_source->Length()] = '\0';
+
+    fragment_source->Read(fragment_text, fragment_source->Length());
+    vertex_source->Read(vertex_text, vertex_source->Length());
 
     //Build the program
     GLuint frag = TS_CreateShader(fragment_text, GL_FRAGMENT_SHADER);
@@ -220,6 +247,9 @@ GLuint TS_LoadShader(const char *file){
 
     if(prog==0)
         fprintf(stderr, "[FJ-GL] %s Error: Could not create program from %s.\n", __func__, file);
+
+    free(fragment_text);
+    free(vertex_text);
 
     return prog;
 }

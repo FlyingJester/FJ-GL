@@ -4,7 +4,7 @@ import sys
 
 defaultenv	= Environment(ENV = os.environ)
 
-linuxenv        = defaultenv.Clone(tools = ['default', 'textfile'], CCFLAGS = " -msse2 -flto -O2 -std=c11 -std=c++11 -Wcast-align -g", LINK = "g++")
+linuxenv        = defaultenv.Clone(tools = ['default', 'textfile'], CCFLAGS = " -msse2 -flto -O2 -Wcast-align -g", CXXFLAGS = " -std=c++11 ", CFLAGS = " -std=c11 ", LINK = "g++")
 
 windowsenv 	= defaultenv.Clone(CCFLAGS = "/O2 /EHsc")
 
@@ -14,23 +14,31 @@ win64env	= windowsenv.Clone()
 linux32env	= linuxenv.Clone()
 linux64env	= linuxenv.Clone()
 
+shimfiles = ['glCopyImageSubData.c']
+
 if sys.platform == 'win32' or sys.platform == 'win64':
-	currentenv = win32env.Clone()
+    currentenv = win32env.Clone()
+    shimfiles = ['glExtra.c']
+    currentenv.Prepend(LIBS= ['GL'])
+elif sys.platform.startswith('linux'):
+    currentenv = linux32env.Clone()
+    shimfiles = ['glExtra.c']
+    currentenv.Prepend(LIBS= ['dl', 'pthread', 'X11', 'GL'])
+elif sys.platform == 'darwin':
+    currentenv = linux64env.Clone()
+    currentenv.Append(CPPPATH = ['platform/osx', '/usr/local/include'] ,CPPDEFINES = ['FJGL_GLEXTRA_HEAD', 'SHIM_GL_COPYIMAGESUBDATA'])
+    currentenv.Prepend(FRAMEWORKS= ['OpenGL'])
 else:
-	if sys.platform == 'linux':
-		currentenv = linux32env.Clone()
-	else:
-		currentenv = linux64env.Clone()
+    currentenv = linux64env.Clone()
+    shimfiles = 'glExtra.c'
+    currentenv.Prepend(LIBS= ['dl', 'pthread', 'X11', 'GL'])
 
-files = []
+files = ["api.c", "circle.c", "config.c", "image.c", "polygon.c", "init.cpp", "shader.cpp"] + shimfiles
 
-shimfiles = []
+libt5 = SConscript(dirs = ["libt5"])
 
-files.extend(glob.glob("*.cpp"))
-files.extend(glob.glob("*.c"))
+currentenv.Append(CPPFLAGS = ' -DC_Plus_Plus ', LINKFLAGS = ' -fvisibility=default ', CPPPATH = ['libt5/t5']);
 
-currentenv.Append(CPPFLAGS = ' -DC_Plus_Plus ', CCFLAGS = " -fopenmp ", LINKFLAGS = ' -fvisibility=default ');
-
-currentenv.Prepend(LIBS= ['GL', 'SDL', 'X11', 'dl', 'pthread', 't5'])
+currentenv.Prepend(LIBS= ['SDL', libt5])
 
 currentenv.SharedLibrary("fj-gl", files)

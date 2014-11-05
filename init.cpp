@@ -28,8 +28,6 @@ bool InitVideo(int w, int h, std::string u){
     configl.niceCircles= 1;
     configl.niceImages = 0;
 
-    T5_init(1, "./");
-
     const char *videodir    = strdup((u+std::string("/system/video")).c_str());
     const char *configfile  = strdup((u+std::string("/system/video/fj-gl.b")).c_str());
 

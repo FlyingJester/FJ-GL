@@ -17,10 +17,9 @@
 #ifdef __cplusplus
     #include <string>
     #define TYPE(x, y) x y
-    #ifdef __linux__
+    #ifndef _WIN32
         #define EXPORT(x) extern "C" x
-    #endif
-	#ifdef _WIN32
+    #else
         #define EXPORT(x) extern "C" __declspec( dllexport ) x
 	#endif
 
@@ -51,6 +50,9 @@
     #define ALIGN
 #endif
 
+#ifndef EXPORT
+		#define EXPORT(x)  x
+#endif
 
 
 typedef unsigned int RGBA;
@@ -112,7 +114,7 @@ typedef struct {
 } ALIGN IMAGE;
 #endif
 
-#ifdef __linux__
+#ifndef _WIN32
 EXPORT(bool InternalInitVideo(int w, int h));
 
 #else
